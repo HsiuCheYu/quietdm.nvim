@@ -3,12 +3,14 @@
 set -eu
 
 root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-sock=$(mktemp -u "${TMPDIR:-/tmp}/quietdm-e2e-XXXXXX.sock")
-log=$(mktemp "${TMPDIR:-/tmp}/quietdm-e2e-XXXXXX.log")
+# A directory of our own, the way $XDG_RUNTIME_DIR/quietdm is in real use.
+rundir=$(mktemp -d "${TMPDIR:-/tmp}/quietdm-e2e-XXXXXX")
+sock="$rundir/sock"
+log="$rundir/daemon.log"
 
 cleanup() {
 	[ -n "${daemon_pid:-}" ] && kill "$daemon_pid" 2>/dev/null || true
-	rm -f "$sock" "$log"
+	rm -rf "$rundir"
 }
 trap cleanup EXIT
 

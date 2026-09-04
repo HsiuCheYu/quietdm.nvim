@@ -153,6 +153,29 @@ func TestSocketPermissions(t *testing.T) {
 	}
 }
 
+func TestListenLeavesAnExistingDirectoryAlone(t *testing.T) {
+	// A socket handed to us inside a directory somebody else owns — /tmp in
+	// CI — must not be re-permissioned. Chmodding it fails there, and would
+	// be the wrong thing to do even where it succeeds.
+	dir := t.TempDir()
+	if err := os.Chmod(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	srv := NewServer(filepath.Join(dir, "sock"), "quietdmd/test", &stubHandler{}, nil)
+	if err := srv.Listen(); err != nil {
+		t.Fatalf("Listen: %v", err)
+	}
+	t.Cleanup(func() { _ = srv.Close() })
+
+	fi, err := os.Stat(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if perm := fi.Mode().Perm(); perm != 0o755 {
+		t.Errorf("directory mode changed to %o, want 755 left as it was", perm)
+	}
+}
+
 func TestHelloIsRequiredFirst(t *testing.T) {
 	_, path := newServer(t, &stubHandler{connected: true})
 	c := dial(t, path)

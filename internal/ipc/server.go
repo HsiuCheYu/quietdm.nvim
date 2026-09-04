@@ -65,11 +65,21 @@ func NewServer(path, version string, h Handler, log *slog.Logger) *Server {
 // previous run, and starts listening with 0600 permissions.
 func (s *Server) Listen() error {
 	dir := filepath.Dir(s.path)
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return fmt.Errorf("create socket dir: %w", err)
-	}
-	if err := os.Chmod(dir, 0o700); err != nil {
-		return fmt.Errorf("chmod socket dir: %w", err)
+	switch _, err := os.Stat(dir); {
+	case err == nil:
+		// The directory already exists — $XDG_RUNTIME_DIR, or whatever the
+		// user pointed -socket at. It is not ours to re-permission, and
+		// trying would fail outright on a shared directory such as /tmp.
+	case os.IsNotExist(err):
+		if err := os.MkdirAll(dir, 0o700); err != nil {
+			return fmt.Errorf("create socket dir: %w", err)
+		}
+		// MkdirAll honours the umask, so tighten the directory we just made.
+		if err := os.Chmod(dir, 0o700); err != nil {
+			return fmt.Errorf("chmod socket dir: %w", err)
+		}
+	default:
+		return fmt.Errorf("stat socket dir: %w", err)
 	}
 	if err := s.clearStale(); err != nil {
 		return err
