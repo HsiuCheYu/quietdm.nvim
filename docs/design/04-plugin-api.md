@@ -48,6 +48,8 @@ require('quietdm').setup {
 ---@class quietdm.Message
 ---@field room    string   Room ID
 ---@field event   string   Event ID, unique; used for de-duplication
+---@field sender  string   Raw Matrix user ID. For de-duplication and
+---                        grouping only — never render it.
 ---@field display string   Alias-applied display name. Always render this,
 ---                        never the raw sender ID.
 ---@field body    string   Emoji-stripped plain text, NOT truncated
