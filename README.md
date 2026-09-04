@@ -2,7 +2,8 @@
 
 在 Neovim 裡收發即時訊息，而畫面在旁人眼中仍然是一個正常的編輯器。
 
-> ⚠️ 目前僅有設計文件，尚無實作。
+> ⚠️ M1（隱晦驗證）已實作：daemon 用 mock transport 送假訊息，前端做得完
+> L0–L2 的收發。**還不能接 IG**——Matrix transport 是 M2 的事。
 
 ## 它長什麼樣子
 
@@ -40,6 +41,88 @@ IG / Messenger → mautrix-meta → Matrix homeserver → quietdmd (Go) → nvim
 ```
 
 Homeserver 與 bridge 由使用者自架，訊息不經過第三方服務。
+
+## 安裝
+
+需要 Neovim 0.9+ 與 Go 1.24+（只有 daemon 需要 Go）。
+
+前端用任何 plugin manager 裝這個 repo，例如 lazy.nvim：
+
+```lua
+{
+  'HsiuCheYu/quietdm.nvim',
+  config = function()
+    require('quietdm').setup {
+      -- panic 鍵預設不綁，請自己挑一個順手又不衝突的
+      panic_key = '<C-\\>',
+    }
+  end,
+}
+```
+
+`setup()` 不會連線，也不會自動啟動 daemon——一個外掛在你不知情時建立網路連線，
+是不能接受的行為。
+
+daemon 自己編：
+
+```sh
+git clone https://github.com/HsiuCheYu/quietdm.nvim
+cd quietdm.nvim
+make build          # 產生 ./quietdmd
+```
+
+## 先跑跑看（不需要 Matrix）
+
+M1 的重點是驗證「隱晦」到底成不成立，所以整套東西可以完全離線跑：
+
+```sh
+make run-mock       # daemon + 內建假對話，走預設 socket 路徑
+```
+
+另一個終端機開 nvim，打開一個 `.go`（或其他白名單 filetype）的檔案：
+
+```vim
+:QuietdmStart
+```
+
+把游標停在某一行不要動。半秒後行尾會浮出 `m.chen · 3 分鐘前 · 晚上要吃什麼`，
+游標一動就消失。`:QuietdmRead` 看最近幾則、`:QuietdmReply` 回覆、
+`:QuietdmPanic` 清空並靜默。
+
+socket 位於 `$XDG_RUNTIME_DIR/quietdm/sock`（權限 `0600`，目錄 `0700`），
+前端預設就找這條路徑，不必額外設定。
+
+## 指令
+
+| 指令 | 作用 |
+|---|---|
+| `:QuietdmStart` / `:QuietdmStop` | 連線 / 斷線 |
+| `:QuietdmRead` | 升到 L2（hover 樣式浮動視窗） |
+| `:QuietdmPanorama` | 升到 L3（quickfix，M3 才有 renderer） |
+| `:QuietdmReply` | 開啟 composer |
+| `:QuietdmSilence [分鐘]` | 手動靜默（開會、螢幕分享前用） |
+| `:QuietdmPanic` | 清空並靜默 |
+| `:QuietdmDebug` | 在 scratch buffer 顯示 IPC 記錄 |
+
+statusline 的暗號要自己插進去，外掛不會接管你的 statusline：
+
+```lua
+-- lualine
+sections = { lualine_x = { function() return require('quietdm').token() end } }
+```
+
+## 開發
+
+```sh
+make test           # go test -race + nvim headless 前端測試 + 端對端測試
+make test-go
+make test-lua
+make test-e2e       # 真的把 daemon 與 nvim 接起來跑完一輪
+```
+
+`tests/spec/invariants_spec.lua` 會掃描原始碼，確認沒有任何模組呼叫會寫入
+buffer、插入虛擬行或彈出通知的 API——那些是[隱晦模型](docs/design/01-covert-model.md)
+的硬性規則，不該靠人工審查來守。
 
 ## 文件
 

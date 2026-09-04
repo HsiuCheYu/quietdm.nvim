@@ -1,0 +1,19 @@
+# Configuration for the end-to-end run: one room, one message, no waiting.
+[transport]
+kind = "mock"
+
+[aliases]
+"@mia:localhost" = "m.chen"
+
+[mock]
+loop = false
+
+[[mock.room]]
+id = "!demo:localhost"
+display = "m.chen"
+
+[[mock.message]]
+room = "!demo:localhost"
+sender = "@mia:localhost"
+body = "晚上要吃什麼 😂"
+after = "0.5s"

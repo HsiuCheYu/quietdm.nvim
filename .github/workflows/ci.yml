@@ -1,0 +1,73 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  go:
+    name: Go
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+          cache: true
+      - name: gofmt
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "These files need gofmt:"
+            echo "$unformatted"
+            exit 1
+          fi
+      - run: go vet ./...
+      - run: go build ./...
+      - run: go test -race ./...
+
+  lua:
+    name: Neovim
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Neovim
+        run: |
+          set -eu
+          base=https://github.com/neovim/neovim/releases/download/stable
+          if curl -fsSL -o nvim.tar.gz "$base/nvim-linux-x86_64.tar.gz"; then
+            dir=nvim-linux-x86_64
+          else
+            curl -fsSL -o nvim.tar.gz "$base/nvim-linux64.tar.gz"
+            dir=nvim-linux64
+          fi
+          tar xzf nvim.tar.gz
+          echo "$PWD/$dir/bin" >> "$GITHUB_PATH"
+      - run: nvim --version
+      - name: Run the frontend tests
+        run: make test-lua
+
+  e2e:
+    name: End to end
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+          cache: true
+      - name: Install Neovim
+        run: |
+          set -eu
+          base=https://github.com/neovim/neovim/releases/download/stable
+          if curl -fsSL -o nvim.tar.gz "$base/nvim-linux-x86_64.tar.gz"; then
+            dir=nvim-linux-x86_64
+          else
+            curl -fsSL -o nvim.tar.gz "$base/nvim-linux64.tar.gz"
+            dir=nvim-linux64
+          fi
+          tar xzf nvim.tar.gz
+          echo "$PWD/$dir/bin" >> "$GITHUB_PATH"
+      - name: Daemon and frontend against each other
+        run: make test-e2e
