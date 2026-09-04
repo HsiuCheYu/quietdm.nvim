@@ -137,6 +137,7 @@ function M.start()
     return
   end
   started = true
+  ipc.reset_handlers()
   install_handlers()
   ipc.start(config.socket_path(M.config))
 end

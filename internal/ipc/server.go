@@ -214,9 +214,11 @@ func encode(v any) ([]byte, error) {
 
 // client is one connected frontend.
 type client struct {
-	conn net.Conn
-	srv  *Server
-	out  chan []byte
+	conn     net.Conn
+	srv      *Server
+	out      chan []byte
+	shutdown chan struct{}
+	shutOnce sync.Once
 
 	mu      sync.Mutex
 	hello   bool
@@ -225,7 +227,12 @@ type client struct {
 }
 
 func newClient(conn net.Conn, srv *Server) *client {
-	return &client{conn: conn, srv: srv, out: make(chan []byte, clientQueue)}
+	return &client{
+		conn:     conn,
+		srv:      srv,
+		out:      make(chan []byte, clientQueue),
+		shutdown: make(chan struct{}),
+	}
 }
 
 func (c *client) greeted() bool {
@@ -237,6 +244,12 @@ func (c *client) greeted() bool {
 // enqueue queues a line, dropping this client's oldest event when its queue is
 // full rather than stalling the daemon.
 func (c *client) enqueue(line []byte) {
+	c.mu.Lock()
+	closed := c.closed
+	c.mu.Unlock()
+	if closed {
+		return
+	}
 	for {
 		select {
 		case c.out <- line:
@@ -264,7 +277,15 @@ func (c *client) close() {
 	}
 	c.closed = true
 	c.mu.Unlock()
+	c.stopWriting()
 	_ = c.conn.Close()
+}
+
+// stopWriting tells the writer to flush what is already queued and stop. A
+// protocol error still owes the client its error event, so the queue is
+// drained before the connection goes away.
+func (c *client) stopWriting() {
+	c.shutOnce.Do(func() { close(c.shutdown) })
 }
 
 func (c *client) serve(ctx context.Context) {
@@ -277,19 +298,34 @@ func (c *client) serve(ctx context.Context) {
 	go func() {
 		defer close(writerDone)
 		w := bufio.NewWriter(c.conn)
+		write := func(line []byte) bool {
+			// A frontend that has stopped reading must not pin this goroutine
+			// forever.
+			_ = c.conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
+			if _, err := w.Write(line); err != nil {
+				return false
+			}
+			return w.Flush() == nil
+		}
 		for {
 			select {
 			case <-ctx.Done():
 				return
-			case line, ok := <-c.out:
-				if !ok {
+			case line := <-c.out:
+				if !write(line) {
 					return
 				}
-				if _, err := w.Write(line); err != nil {
-					return
-				}
-				if err := w.Flush(); err != nil {
-					return
+			case <-c.shutdown:
+				// Flush whatever is already queued, then stop.
+				for {
+					select {
+					case line := <-c.out:
+						if !write(line) {
+							return
+						}
+					default:
+						return
+					}
 				}
 			}
 		}
@@ -309,8 +345,14 @@ func (c *client) serve(ctx context.Context) {
 	if err := sc.Err(); err != nil && !errors.Is(err, net.ErrClosed) {
 		c.srv.log.Debug("client read ended", "err", err)
 	}
+	// Let the writer deliver the last event — typically the error that ended
+	// the conversation — before the socket closes under it.
+	c.stopWriting()
+	select {
+	case <-writerDone:
+	case <-time.After(5 * time.Second):
+	}
 	c.close()
-	<-writerDone
 }
 
 // dispatch handles one command and reports whether the connection may stay

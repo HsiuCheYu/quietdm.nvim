@@ -120,15 +120,16 @@ function M.active_room()
 end
 
 ---The newest message the user has not been shown yet, across all rooms.
+---
+---Only the latest message of each room counts: once the user has seen it,
+---showing an older one at L1 would read as out of order. Catching up on what
+---came before is what L2 is for.
 ---@return quietdm.Message|nil
 function M.next_unglanced()
   local newest
   for _, list in pairs(M.messages) do
-    for i = #list, 1, -1 do
-      local msg = list[i]
-      if M.glanced[msg.event] then
-        break -- everything older has been glanced too
-      end
+    local msg = list[#list]
+    if msg and not M.glanced[msg.event] then
       if not newest or msg.ts > newest.ts then
         newest = msg
       end

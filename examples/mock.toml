@@ -1,0 +1,46 @@
+# A demo configuration for M1: no Matrix, no homeserver, no network at all.
+#
+#   quietdmd -config examples/mock.toml
+#
+# Then, in Neovim:
+#
+#   :QuietdmStart
+#
+# Park the cursor on a line of code and wait half a second.
+
+[transport]
+kind = "mock"
+
+[aliases]
+# Make the sender look like a colleague's git account.
+"@mia:localhost" = "m.chen"
+
+[sanitize]
+strip_emoji = true
+
+[mock]
+# Replay the script forever, so a demo never runs dry.
+loop = true
+
+[[mock.room]]
+id = "!demo:localhost"
+display = "m.chen"
+
+# `after` is the delay before each message, measured from the previous one.
+[[mock.message]]
+room = "!demo:localhost"
+sender = "@mia:localhost"
+body = "晚上要吃什麼"
+after = "20s"
+
+[[mock.message]]
+room = "!demo:localhost"
+sender = "@mia:localhost"
+body = "還是老樣子那間拉麵？😂"
+after = "45s"
+
+[[mock.message]]
+room = "!demo:localhost"
+sender = "@mia:localhost"
+body = "七點我先去排隊，你直接來"
+after = "60s"

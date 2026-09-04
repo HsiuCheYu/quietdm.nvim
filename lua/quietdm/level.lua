@@ -48,6 +48,11 @@ function M.setup(c, context, opts)
 end
 
 local function renderer(level)
+  -- clear() can be reached before setup() (a :QuietdmStop on a fresh
+  -- session), and clearing nothing is a perfectly good outcome.
+  if not cfg then
+    return nil
+  end
   return registry.get_renderer(cfg.renderers[level], level)
 end
 

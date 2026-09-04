@@ -37,6 +37,12 @@ function M.on(kind, fn)
   table.insert(state.handlers[kind], fn)
 end
 
+---Drop every handler. Called before re-installing them on a restart, so a
+---stop/start cycle cannot leave two copies of each handler behind.
+function M.reset_handlers()
+  state.handlers = {}
+end
+
 local function emit(kind, event)
   for _, fn in ipairs(state.handlers[kind] or {}) do
     local ok, err = pcall(fn, event)
