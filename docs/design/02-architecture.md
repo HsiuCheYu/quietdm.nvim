@@ -51,13 +51,17 @@
 cmd/
   quietdmd/          # main：旗標解析、設定載入、生命週期
 internal/
+  model/             # Message / Room 等共用型別，不相依任何其他套件
   transport/         # Transport 介面 + matrix 實作 + mock 實作
   session/           # 訊息正規化、聯絡人別名、未讀狀態機
-  store/             # Store 介面 + SQLite 實作
+  store/             # Store 介面 + 記憶體實作（M1）、SQLite（M2）
   ipc/               # Unix socket server、NDJSON 編解碼、client 管理
   config/            # TOML 設定檔
-  sanitize/          # emoji 過濾、截斷、多媒體佔位符
+  sanitize/          # emoji 過濾、多媒體佔位符
 ```
+
+`model` 獨立出來的理由：`transport`、`store`、`session`、`ipc` 都要談論同一個
+訊息型別，若把它放在其中任何一層，其餘各層就得互相 import。
 
 ### Transport 介面
 
@@ -94,14 +98,17 @@ type Transport interface {
 // Store persists conversation state. All paths are under the daemon's
 // XDG state directory with 0600 permissions.
 type Store interface {
-    AppendMessage(ctx context.Context, m Message) error
-    RecentMessages(ctx context.Context, roomID string, limit int) ([]Message, error)
+    AppendMessage(ctx context.Context, m model.Message) error
+    RecentMessages(ctx context.Context, roomID string, limit int) ([]model.Message, error)
     UnreadCount(ctx context.Context, roomID string) (int, error)
     SetReadMarker(ctx context.Context, roomID, eventID string) error
+    Close() error
 }
 ```
 
-SQLite 實作，單一檔案 `$XDG_STATE_HOME/quietdm/state.db`。
+M1 只有記憶體實作（每個 room 保留固定筆數，滿了丟最舊的）；M2 換成 SQLite，
+單一檔案 `$XDG_STATE_HOME/quietdm/state.db`。未讀數由已讀位置推導而非另存計數，
+這樣即使 `mark_read` 亂序抵達也不會出現負數。
 
 **保留訊息歷史是必要的**：L2/L3 需要顯示上下文，而重新向 homeserver 拉取歷史會有延遲，延遲會逼使用者盯著螢幕等——那個「盯著等」的動作本身就很可疑。
 
@@ -179,8 +186,12 @@ user_id      = "@me:localhost"
 
 [sanitize]
 strip_emoji = true
-max_line    = 60
+max_body    = 8192   # 位元組上限，協定安全網
 ```
+
+`max_body` 是為了守住 NDJSON 單行 64 KiB 的上限，**不是呈現用的截斷**：一則訊息
+在畫面上能放多少，只有 renderer 知道（見 [03-ipc-protocol.md](03-ipc-protocol.md)
+對 `body` 欄位的規定）。
 
 前端設定透過 `require('quietdm').setup{}`，見 [04-plugin-api.md](04-plugin-api.md)。
 

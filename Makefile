@@ -31,6 +31,7 @@ vet:
 clean:
 	rm -f quietdmd
 
-# Start the daemon with the demo script, on a socket under /tmp.
+# Start the daemon with the demo script, on the default socket path so the
+# frontend needs no configuration at all.
 run-mock: build
-	./quietdmd -config examples/mock.toml -socket /tmp/quietdm-demo.sock -v
+	./quietdmd -config examples/mock.toml -v

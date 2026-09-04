@@ -6,7 +6,7 @@
 
 因此 M1 完全不碰 Matrix。
 
-## M1 — 隱晦驗證（不碰 Matrix）
+## M1 — 隱晦驗證（不碰 Matrix）　*實作完成，驗收未做*
 
 **目標：能用假資料完整體驗一次收發流程，據此判斷隱晦模型是否成立。**
 
@@ -19,6 +19,9 @@
 - `cmdline` composer
 - `guard.lua`：filetype 白名單、`FocusLost`、panic、靜默
 - `statusline` notifier
+
+程式碼已到位（`make test` 全綠，含一個把 daemon 與前端接起來跑完整流程的端對端
+測試），但**驗收還沒做**——那需要一整天的真實使用，不是測試能代替的。
 
 **驗收：** 在真實工作環境中用一整天。自問三個問題——
 1. 有沒有任何一刻，我擔心旁邊的人看到了？
@@ -40,12 +43,13 @@
 
 ## M3 — 可插拔與其餘通道
 
-- `registry.lua`：renderer / composer / notifier 註冊 API 與驗證
+M1 為了讓端對端流程跑得完整，已經先做掉了幾項：`registry.lua` 的註冊與驗證、
+idle timer 與 `VimResized` 自動降級、`:QuietdmDebug` 與 IPC 環形記錄、
+以及不變式的靜態檢查（`tests/spec/invariants_spec.lua`）。剩下的是：
+
 - `diagnostic` renderer、`quickfix` renderer（L3）
 - `prompt` composer、`gitcommit` composer
-- 曝光等級的自動降級（idle timer、`VimResized`）
-- `:QuietdmDebug` 與 IPC 環形記錄
-- 針對不變式的測試：靜態檢查 renderer 是否呼叫了被禁止的 API
+- 不變式的動態檢查（執行期攔截被禁止的 API 呼叫，而非只掃原始碼）
 
 ## M4 — 讓別人裝得起來
 
