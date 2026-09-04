@@ -1,0 +1,7 @@
+# Build output
+/quietdmd
+/dist/
+
+# Local runtime junk
+*.db
+*.sock
