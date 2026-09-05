@@ -106,8 +106,17 @@ func TestValidate(t *testing.T) {
 	}
 	cfg.Transport.Kind = "matrix"
 	if err := cfg.Validate(); err == nil {
-		t.Error("matrix is not implemented until M2 and should say so")
+		t.Error("matrix without a homeserver must be rejected")
 	}
+	cfg.Matrix.Homeserver = "http://localhost:8008"
+	if err := cfg.Validate(); err == nil {
+		t.Error("matrix without a user_id must be rejected")
+	}
+	cfg.Matrix.UserID = "@me:localhost"
+	if err := cfg.Validate(); err != nil {
+		t.Errorf("a complete matrix section must validate: %v", err)
+	}
+	cfg = Default()
 	cfg.Transport.Kind = "carrier-pigeon"
 	if err := cfg.Validate(); err == nil {
 		t.Error("an unknown transport must be rejected")
@@ -142,6 +151,54 @@ state_db = "/tmp/elsewhere.db"
 	}
 	if got := cfg.StateDBPath(); got != "/tmp/elsewhere.db" {
 		t.Errorf("state db = %q", got)
+	}
+}
+
+func TestMatrixDefaultsToEncrypted(t *testing.T) {
+	if !Default().Matrix.Encrypt {
+		t.Error("every room a bridge creates is encrypted; the default must be true")
+	}
+	path := write(t, `
+[transport]
+kind = "matrix"
+
+[matrix]
+homeserver = "http://localhost:8008"
+user_id    = "@me:localhost"
+encrypt    = false
+`)
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Matrix.Encrypt {
+		t.Error("encrypt = false was ignored")
+	}
+	if cfg.Matrix.Homeserver != "http://localhost:8008" || cfg.Matrix.UserID != "@me:localhost" {
+		t.Errorf("matrix = %+v", cfg.Matrix)
+	}
+	// Untouched sections keep their defaults.
+	if cfg.Daemon.Store != "sqlite" {
+		t.Errorf("store = %q", cfg.Daemon.Store)
+	}
+}
+
+func TestMatrixPathsFollowXDG(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", "/tmp/state")
+	cfg := Default()
+	if got := cfg.MatrixSessionDBPath(); got != "/tmp/state/quietdm/matrix.db" {
+		t.Errorf("session db = %q", got)
+	}
+	if got := cfg.PickleKeyPath(); got != "/tmp/state/quietdm/pickle.key" {
+		t.Errorf("pickle key = %q", got)
+	}
+	cfg.Matrix.SessionDB = "/tmp/elsewhere.db"
+	cfg.Matrix.PickleKeyFile = "/tmp/elsewhere.key"
+	if got := cfg.MatrixSessionDBPath(); got != "/tmp/elsewhere.db" {
+		t.Errorf("session db = %q", got)
+	}
+	if got := cfg.PickleKeyPath(); got != "/tmp/elsewhere.key" {
+		t.Errorf("pickle key = %q", got)
 	}
 }
 

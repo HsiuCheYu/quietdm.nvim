@@ -187,6 +187,9 @@ history_capacity = 500       # 每個 room 保留的訊息數
 [matrix]
 homeserver   = "http://localhost:8008"
 user_id      = "@me:localhost"
+encrypt      = true          # Olm/Megolm，預設開
+# device_id  = "..."         # 留空則啟動時問 homeserver
+# session_db = "..."         # 預設 $XDG_STATE_HOME/quietdm/matrix.db
 # 存取 token 從 $QUIETDM_TOKEN 環境變數或獨立的 0600 檔案讀取，不寫在設定檔裡
 
 [aliases]
@@ -207,6 +210,8 @@ max_body    = 8192   # 位元組上限，協定安全網
 
 - 存取 token 不寫入設定檔，改由環境變數或獨立的 `0600` 檔案提供
 - socket 與 state db 權限 `0600`，位於使用者專屬目錄
-- E2EE 金鑰由 mautrix-go 的 crypto store 管理，與 state db 同目錄同權限
+- E2EE 金鑰由 mautrix-go 的 crypto store 管理，與 state db 同目錄同權限；加密它的
+  pickle key 就在旁邊，擋的是「只有 .db 外流」而不是能讀該目錄的人（見
+  [matrix-setup.md](../matrix-setup.md)）
 - daemon 只監聽 Unix socket，**不開任何 TCP port**
 - 前端傳來的指令只能操作已知的 room，daemon 不接受任意 URL 或路徑參數

@@ -2,6 +2,9 @@
 
 GO      ?= go
 NVIM    ?= nvim
+# mautrix-go links against libolm unless this tag is set; goolm is the pure-Go
+# implementation, which keeps the daemon a single static binary with no cgo.
+TAGS    ?= goolm
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 
 .PHONY: all build test test-go test-lua test-e2e fmt vet clean run-mock
@@ -9,12 +12,12 @@ VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 all: build
 
 build: ## Build the daemon into ./quietdmd
-	$(GO) build -ldflags "-X main.version=$(VERSION)" -o quietdmd ./cmd/quietdmd
+	$(GO) build -tags $(TAGS) -ldflags "-X main.version=$(VERSION)" -o quietdmd ./cmd/quietdmd
 
 test: test-go test-lua test-e2e
 
 test-go:
-	$(GO) test -race ./...
+	$(GO) test -tags $(TAGS) -race ./...
 
 test-lua:
 	$(NVIM) --headless -u tests/minimal_init.lua -c "luafile tests/run.lua"
@@ -26,7 +29,7 @@ fmt:
 	$(GO) fmt ./...
 
 vet:
-	$(GO) vet ./...
+	$(GO) vet -tags $(TAGS) ./...
 
 clean:
 	rm -f quietdmd

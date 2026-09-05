@@ -1,0 +1,48 @@
+# quietdm daemon as a systemd user service.
+#
+#   mkdir -p ~/.config/systemd/user
+#   cp contrib/systemd/quietdmd.service ~/.config/systemd/user/
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now quietdmd
+#
+# Adjust ExecStart if the binary lives somewhere else.
+
+[Unit]
+Description=quietdm daemon
+Documentation=https://github.com/HsiuCheYu/quietdm.nvim
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/quietdmd
+Restart=on-failure
+RestartSec=5s
+
+# The access token comes from here, not from the config file and not from this
+# unit. Create it with mode 0600 and put one line in it:
+#
+#   QUIETDM_TOKEN=syt_...
+#
+# The leading "-" means the daemon still starts when the file is absent, which
+# is what the mock transport wants.
+EnvironmentFile=-%h/.config/quietdm/env
+
+# $XDG_RUNTIME_DIR/quietdm for the socket and $XDG_STATE_HOME/quietdm for the
+# databases, both created with the permissions the daemon expects. systemd
+# removes the runtime directory on stop, which is the right lifetime for a
+# socket.
+RuntimeDirectory=quietdm
+RuntimeDirectoryMode=0700
+StateDirectory=quietdm
+StateDirectoryMode=0700
+
+# Kept deliberately modest: sandboxing options that need privileges are not
+# reliably available to a user manager, and a unit that refuses to start is
+# worse than one that is merely unhardened. ProtectSystem=strict and friends
+# are worth adding if your systemd is new enough to honour them here.
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=default.target

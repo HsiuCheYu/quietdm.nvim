@@ -21,7 +21,10 @@ check(vim.wait(5000, function() return quietdm.connected() end, 20), 'never conn
 check(quietdm.token() == '✓', 'the statusline token should start quiet')
 
 check(vim.wait(5000, function() return state.next_unglanced() ~= nil end, 20), 'no message arrived')
-check(quietdm.token() == '⟳', 'unread should change the token')
+-- The message and the room's unread count arrive as two separate IPC lines, so
+-- the token can still be a step behind when the message itself has landed.
+check(vim.wait(2000, function() return quietdm.token() == '⟳' end, 20),
+  'unread should change the token')
 check(quietdm.level() == 'L0', 'arrival must not change the exposure level (I5)')
 
 local buf = vim.api.nvim_create_buf(true, false)
