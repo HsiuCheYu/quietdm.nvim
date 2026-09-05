@@ -30,16 +30,23 @@
 
 **這一步的結論可能會推翻 01 文件的設計。** 那是預期中的事，也是把它排在第一位的原因。
 
-## M2 — 真的能聊天
+## M2 — 真的能聊天　*實作完成，驗收未做*
 
 - `matrix` transport：mautrix-go、`/sync`、送訊、已讀回條
-- E2EE：Olm/Megolm、crypto store、device 驗證流程文件
+- E2EE：Olm/Megolm、crypto store、device 驗證流程文件（[matrix-setup.md](../matrix-setup.md)）
 - SQLite `Store`
-- `sanitize`：emoji 過濾、多媒體佔位符、聯絡人別名
 - daemon 斷線重連與 `connected: false` 語意
 - systemd user unit 範本
 
-**驗收：** 與一個真人用 IG 聊完一段完整對話，全程只用 nvim。
+`sanitize` 的三項（emoji 過濾、多媒體佔位符、聯絡人別名）在 M1 就一起做掉了。
+
+E2EE 少了一件事：**互動式的 device 驗證（SAS）沒有實作**。daemon 的 device 在別的
+client 眼中是未驗證的，實際影響寫在 [matrix-setup.md](../matrix-setup.md#五e2ee-與-device-驗證)。
+補不補要看 M2 驗收時它到底礙不礙事——如果沒人開「只傳給已驗證裝置」，它就只是
+Element 上一則提示。
+
+**驗收：** 與一個真人用 IG 聊完一段完整對話，全程只用 nvim。這需要先有一台自架的
+homeserver 與 bridge，而那個的安裝教學是 M4——所以 M2 的驗收實際上會跟 M4 一起做。
 
 ## M3 — 可插拔與其餘通道
 

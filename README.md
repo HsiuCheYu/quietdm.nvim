@@ -2,8 +2,10 @@
 
 在 Neovim 裡收發即時訊息，而畫面在旁人眼中仍然是一個正常的編輯器。
 
-> ⚠️ M1（隱晦驗證）已實作：daemon 用 mock transport 送假訊息，前端做得完
-> L0–L2 的收發。**還不能接 IG**——Matrix transport 是 M2 的事。
+> ⚠️ M2 的程式碼已到位：Matrix transport（含 E2EE）、SQLite 記錄、systemd 範本，
+> 加上 M1 的前端 L0–L2 與 mock transport。**但兩個里程碑的驗收都還沒做**——那需要
+> 真的用一整天、真的跟一個人聊完一段完整對話，不是測試能代替的。自架 homeserver
+> 與 bridge 的教學是 M4 的事。
 
 ## 它長什麼樣子
 
@@ -71,9 +73,17 @@ cd quietdm.nvim
 make build          # 產生 ./quietdmd
 ```
 
+請用 `make build`，不要直接 `go build`。mautrix-go 預設連 libolm（C 函式庫），
+`make` 會帶上 `-tags goolm` 改用純 Go 的實作，daemon 才會是一個不需要 cgo 的單一
+執行檔。要自己下指令的話：
+
+```sh
+go build -tags goolm ./cmd/quietdmd
+```
+
 ## 先跑跑看（不需要 Matrix）
 
-M1 的重點是驗證「隱晦」到底成不成立，所以整套東西可以完全離線跑：
+想先確認隱晦模型對自己成不成立，整套東西可以完全離線跑：
 
 ```sh
 make run-mock       # daemon + 內建假對話，走預設 socket 路徑
@@ -91,6 +101,22 @@ make run-mock       # daemon + 內建假對話，走預設 socket 路徑
 
 socket 位於 `$XDG_RUNTIME_DIR/quietdm/sock`（權限 `0600`，目錄 `0700`），
 前端預設就找這條路徑，不必額外設定。
+
+## 接上 Matrix
+
+daemon 認得的只有 Matrix；IG 那一段由自架的 mautrix-meta bridge 負責。取得 access
+token、把它放在哪裡、E2EE 的 device 在別的 client 眼中為什麼是未驗證的，以及這些
+到底防得了什麼防不了什麼，都寫在 [docs/matrix-setup.md](docs/matrix-setup.md)。
+
+最短版本：
+
+```sh
+export QUIETDM_TOKEN=syt_...
+quietdmd -config examples/matrix.toml -v
+```
+
+長期跑用 systemd user service，範本在
+[`contrib/systemd/quietdmd.service`](contrib/systemd/quietdmd.service)。
 
 ## daemon 的設定
 
@@ -151,6 +177,7 @@ buffer、插入虛擬行或彈出通知的 API——那些是[隱晦模型](docs
 | [03-ipc-protocol](docs/design/03-ipc-protocol.md) | daemon 與前端的 NDJSON 協定 |
 | [04-plugin-api](docs/design/04-plugin-api.md) | Renderer / Composer / Notifier 介面 |
 | [05-roadmap](docs/design/05-roadmap.md) | 開發里程碑 |
+| [matrix-setup](docs/matrix-setup.md) | 接上 homeserver、token、E2EE 與已知限制 |
 
 ## 它不做什麼
 

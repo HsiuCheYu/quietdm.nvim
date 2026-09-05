@@ -1,0 +1,33 @@
+# Talking to a real homeserver.
+#
+#   QUIETDM_TOKEN=syt_... quietdmd -config examples/matrix.toml
+#
+# See docs/matrix-setup.md for where the token comes from and what the
+# encryption side of this actually protects.
+
+[transport]
+kind = "matrix"
+
+[matrix]
+homeserver = "http://localhost:8008"
+user_id    = "@me:localhost"
+
+# The access token never goes in this file. Either export $QUIETDM_TOKEN or
+# point token_file at a file with mode 0600 — the daemon refuses to read one
+# that anybody else on the machine can.
+# token_file = "~/.config/quietdm/token"
+
+# Left empty, the daemon asks the homeserver which device the token belongs to.
+# device_id = "ABCDEFGHIJ"
+
+# Olm/Megolm, on by default. Every room a bridge creates is encrypted, so
+# turning this off means reading nothing at all.
+encrypt = true
+
+[aliases]
+# The frontend shows the localpart of the sender by default, which already
+# reads like a git author name. Override it when it does not.
+"@instagram_1234567:localhost" = "m.chen"
+
+[sanitize]
+strip_emoji = true
