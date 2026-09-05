@@ -23,9 +23,9 @@ jobs:
             echo "$unformatted"
             exit 1
           fi
-      - run: go vet ./...
-      - run: go build ./...
-      - run: go test -race ./...
+      - run: make vet
+      - run: make build
+      - run: make test-go
 
   lua:
     name: Neovim
