@@ -54,7 +54,7 @@ M1 為了讓端對端流程跑得完整，已經先做掉了幾項：`registry.l
 idle timer 與 `VimResized` 自動降級、`:QuietdmDebug` 與 IPC 環形記錄、
 以及不變式的靜態檢查（`tests/spec/invariants_spec.lua`）。剩下的是：
 
-- `diagnostic` renderer、`quickfix` renderer（L3）
+- ~~`diagnostic` renderer、`quickfix` renderer（L3）~~ 已完成
 - `prompt` composer、`gitcommit` composer
 - 不變式的動態檢查（執行期攔截被禁止的 API 呼叫，而非只掃原始碼）
 

@@ -141,7 +141,7 @@ history_capacity = 500       # 每個對話保留幾則
 |---|---|
 | `:QuietdmStart` / `:QuietdmStop` | 連線 / 斷線 |
 | `:QuietdmRead` | 升到 L2（hover 樣式浮動視窗） |
-| `:QuietdmPanorama` | 升到 L3（quickfix，M3 才有 renderer） |
+| `:QuietdmPanorama` | 升到 L3（quickfix 列表） |
 | `:QuietdmReply` | 開啟 composer |
 | `:QuietdmSilence [分鐘]` | 手動靜默（開會、螢幕分享前用） |
 | `:QuietdmPanic` | 清空並靜默 |
@@ -153,6 +153,29 @@ statusline 的暗號要自己插進去，外掛不會接管你的 statusline：
 -- lualine
 sections = { lualine_x = { function() return require('quietdm').token() end } }
 ```
+
+## 換一套偽裝
+
+哪一種偽裝比較安靜，取決於你的畫面本來就有什麼。預設是 `blame`——如果你沒有
+gitsigns 但有一個很吵的 language server，`diagnostic` 反而更不起眼：
+
+```lua
+require('quietdm').setup {
+  renderers = { glance = 'diagnostic', read = 'float', panorama = 'quickfix' },
+}
+```
+
+| renderer | 等級 | 長相 |
+|---|---|---|
+| `blame` | L1 | 游標行右對齊：`m.chen · 3 分鐘前 · 晚上要吃什麼` |
+| `diagnostic` | L1 | 行尾提示：`■ m.chen: 晚上要吃什麼` |
+| `float` | L2 | LSP hover 樣式浮動視窗 |
+| `quickfix` | L3 | `internal/mia/mia.go|142 col 3| m.chen: 晚上要吃什麼` |
+
+L3 的檔名與行號都是道具，能對它們動作的按鍵在那個 buffer 裡都被綁成空的——不然
+`<CR>` 會把你丟進一個不存在的檔案。
+
+自己寫一個也可以，介面見 [04-plugin-api](docs/design/04-plugin-api.md)。
 
 ## 開發
 

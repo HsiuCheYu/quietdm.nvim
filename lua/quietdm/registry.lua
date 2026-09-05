@@ -79,7 +79,9 @@ end
 ---Load the implementations that ship with the plugin.
 function M.load_builtins()
   require('quietdm.renderers.blame')
+  require('quietdm.renderers.diagnostic')
   require('quietdm.renderers.float')
+  require('quietdm.renderers.quickfix')
   require('quietdm.composers.cmdline')
   require('quietdm.notifiers.statusline')
 end
