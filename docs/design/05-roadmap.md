@@ -48,15 +48,20 @@ Element 上一則提示。
 **驗收：** 與一個真人用 IG 聊完一段完整對話，全程只用 nvim。這需要先有一台自架的
 homeserver 與 bridge，而那個的安裝教學是 M4——所以 M2 的驗收實際上會跟 M4 一起做。
 
-## M3 — 可插拔與其餘通道
+## M3 — 可插拔與其餘通道　*完成*
 
 M1 為了讓端對端流程跑得完整，已經先做掉了幾項：`registry.lua` 的註冊與驗證、
 idle timer 與 `VimResized` 自動降級、`:QuietdmDebug` 與 IPC 環形記錄、
 以及不變式的靜態檢查（`tests/spec/invariants_spec.lua`）。剩下的是：
 
-- ~~`diagnostic` renderer、`quickfix` renderer（L3）~~ 已完成
+- `diagnostic` renderer、`quickfix` renderer（L3）
 - `prompt` composer、`gitcommit` composer
-- 不變式的動態檢查（執行期攔截被禁止的 API 呼叫，而非只掃原始碼）
+- 不變式的動態檢查（`tests/spec/runtime_invariants_spec.lua`：在 API 上裝攔截器，
+  把整條流程跑一遍，而不是只掃原始碼）
+
+動態檢查的門檻刻意比靜態掃描窄，因為真正的規則本來就比較窄：I1 禁止的是訊息文字進
+入**使用者正在編輯的 buffer**，不是任何 buffer——L2 借用的 LSP hover 視窗就是往自己
+的 scratch buffer 寫，那正是它的用法。
 
 ## M4 — 讓別人裝得起來
 

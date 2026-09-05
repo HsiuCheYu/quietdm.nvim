@@ -175,6 +175,14 @@ require('quietdm').setup {
 L3 的檔名與行號都是道具，能對它們動作的按鍵在那個 buffer 裡都被綁成空的——不然
 `<CR>` 會把你丟進一個不存在的檔案。
 
+composer 也可以換：
+
+| composer | 說明 |
+|---|---|
+| `cmdline` | **預設。** 在 cmdline 打字，提示符偽裝成替換指令 |
+| `prompt` | LSP rename 樣式的單行浮動輸入框 |
+| `gitcommit` | `filetype=gitcommit` 的 scratch buffer，`:w` 送出、關掉視窗取消。長回覆用 |
+
 自己寫一個也可以，介面見 [04-plugin-api](docs/design/04-plugin-api.md)。
 
 ## 開發
@@ -186,9 +194,11 @@ make test-lua
 make test-e2e       # 真的把 daemon 與 nvim 接起來跑完一輪
 ```
 
-`tests/spec/invariants_spec.lua` 會掃描原始碼，確認沒有任何模組呼叫會寫入
-buffer、插入虛擬行或彈出通知的 API——那些是[隱晦模型](docs/design/01-covert-model.md)
-的硬性規則，不該靠人工審查來守。
+不變式有兩道檢查，都不靠人工審查：`tests/spec/invariants_spec.lua` 掃描原始碼，確認
+沒有任何模組**寫得出**會改 buffer、插虛擬行或彈通知的呼叫；
+`tests/spec/runtime_invariants_spec.lua` 則在 API 上裝攔截器，把 L1→L3、回覆、panic
+整條流程跑一遍，確認沒有任何模組**真的走到**那裡——包裝過一層、查表叫出來、或交給
+別的函式庫去做的，靜態掃描是看不到的。
 
 ## 文件
 
