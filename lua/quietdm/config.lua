@@ -17,6 +17,7 @@ M.defaults = {
     glance_delay = 500, -- CursorHold delay (ms); should match 'updatetime'
     glance_timeout = 4000, -- L1 disappears on its own after this
     idle_downgrade = 60000, -- back to L0 after this long without input
+    hint_timeout = 3000, -- how long the failed-send hint stays on screen
   },
 
   -- Which implementation draws each level, and how replies are typed.
@@ -64,6 +65,33 @@ function M.build(opts)
   return vim.tbl_deep_extend('force', vim.deepcopy(M.defaults), opts or {})
 end
 
+---The daemon's last resort for a runtime directory is Go's os.TempDir():
+---$TMPDIR with trailing slashes stripped (but never down to nothing), else
+---/tmp. Mirror it exactly.
+---
+---vim.fn.tempname() would point at nvim's own private subdirectory, which the
+---daemon has never heard of — and a path the two sides disagree on fails
+---silently, which is the hardest kind of failure to notice here. Exported so
+---the rule can be tested on any machine, including one where the earlier
+---branches mean it is never reached.
+---@return string
+function M.temp_dir()
+  local tmp = vim.env.TMPDIR
+  if not tmp or tmp == '' then
+    return '/tmp'
+  end
+  while #tmp > 1 and tmp:sub(-1) == '/' do
+    tmp = tmp:sub(1, -2)
+  end
+  return tmp
+end
+
+---Join a directory with the rest of the socket path the way Go's
+---filepath.Join does: exactly one separator, whatever the directory ends in.
+local function join(dir, rest)
+  return (dir:gsub('/+$', '')) .. '/' .. rest
+end
+
 ---Resolve the socket path, mirroring the daemon's own default.
 ---@param cfg quietdm.Config
 ---@return string
@@ -76,23 +104,10 @@ function M.socket_path(cfg)
     local uid = vim.uv and vim.uv.getuid and vim.uv.getuid() or vim.loop.getuid()
     runtime = '/run/user/' .. tostring(uid)
     if vim.fn.isdirectory(runtime) == 0 then
-      -- The daemon's last resort is Go's os.TempDir(): $TMPDIR with trailing
-      -- slashes stripped, else /tmp. Mirror it exactly. vim.fn.tempname()
-      -- would point at nvim's own private subdirectory, which the daemon has
-      -- never heard of — and a path the two sides disagree on fails silently,
-      -- which is the hardest kind of failure to notice here.
-      local tmp = vim.env.TMPDIR
-      if not tmp or tmp == '' then
-        runtime = '/tmp'
-      else
-        while #tmp > 1 and tmp:sub(-1) == '/' do
-          tmp = tmp:sub(1, -2)
-        end
-        runtime = tmp
-      end
+      runtime = M.temp_dir()
     end
   end
-  return runtime .. '/quietdm/sock'
+  return join(runtime, 'quietdm/sock')
 end
 
 return M

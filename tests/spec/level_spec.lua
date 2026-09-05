@@ -231,6 +231,37 @@ return {
     T.eq(#marks(buf), 0)
   end,
 
+  -- The other direction of the same rule: the hint expiring must not take a
+  -- glance drawn in the meantime with it.
+  ['the failed-send hint expiring leaves the glance alone'] = function()
+    local buf = fresh({ level = { hint_timeout = 30 } })
+    quietdm.send_failed()
+    T.eq(#marks(buf), 1)
+    arrive('晚上要吃什麼')
+    level.glance()
+    T.eq(#marks(buf), 2)
+
+    T.truthy(vim.wait(1000, function() return #marks(buf) == 1 end, 10), 'the hint never expired')
+    local left = marks(buf)[1][4].virt_text
+    local text = ''
+    for _, chunk in ipairs(left) do
+      text = text .. chunk[1]
+    end
+    T.truthy(text:find('m.chen', 1, true), 'the surviving mark is the glance, got ' .. text)
+    level.clear()
+  end,
+
+  -- ipc.stop() answers in-flight requests with an error on the next tick, and
+  -- that error draws a hint. It must not land on a screen the user just asked
+  -- to be emptied.
+  ['stop clears the screen even for a hint drawn on the next tick'] = function()
+    local buf = fresh()
+    vim.schedule(function() quietdm.send_failed() end)
+    quietdm.stop()
+    vim.wait(100)
+    T.eq(#marks(buf), 0, 'a hint drawn after the clear must not survive it')
+  end,
+
   ['panic clears the screen and goes silent'] = function()
     local buf = fresh()
     arrive('hi')
