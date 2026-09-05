@@ -44,7 +44,7 @@ Homeserver 與 bridge 由使用者自架，訊息不經過第三方服務。
 
 ## 安裝
 
-需要 Neovim 0.9+ 與 Go 1.24+（只有 daemon 需要 Go）。
+需要 Neovim 0.9+ 與 Go 1.25+（只有 daemon 需要 Go）。
 
 前端用任何 plugin manager 裝這個 repo，例如 lazy.nvim：
 
