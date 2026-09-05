@@ -47,6 +47,28 @@ return {
     T.eq(level.current, 'L0')
   end,
 
+  -- The failed-send hint and the glance share a namespace. Clearing the whole
+  -- namespace when the cursor moves would wipe the hint too, and that hint is
+  -- the one thing the user must not miss (01-covert-model.md section 7).
+  ['hiding the glance leaves other marks alone'] = function()
+    local buf = fresh()
+    arrive('晚上要吃什麼')
+    level.glance()
+    T.eq(#marks(buf), 1)
+
+    quietdm.send_failed()
+    T.eq(#marks(buf), 2, 'the failure hint is drawn alongside the glance')
+
+    level.hide_glance()
+    local left = marks(buf)
+    T.eq(#left, 1, 'only the glance goes away')
+    local text = ''
+    for _, chunk in ipairs(left[1][4].virt_text) do
+      text = text .. chunk[1]
+    end
+    T.truthy(text:find('unsaved', 1, true), 'the surviving mark is the hint, got ' .. text)
+  end,
+
   ['a glance draws blame-styled virtual text on the cursor line'] = function()
     local buf = fresh()
     local before = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
@@ -127,6 +149,20 @@ return {
     level.clear()
     T.falsy(vim.api.nvim_win_is_valid(float), 'clear closes the float')
     T.eq(level.current, 'L0')
+  end,
+
+  -- Both renderers go through ctx.time, so display.time_format means the same
+  -- thing at L1 and L2 rather than only at L1.
+  ['the float honours display.time_format'] = function()
+    for _, case in ipairs({ { 'clock', '%d%d:%d%d' }, { 'relative', '剛剛' } }) do
+      fresh({ display = { time_format = case[1] } })
+      arrive('晚上要吃什麼')
+      level.read()
+      local wins = vim.api.nvim_list_wins()
+      local lines = vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(wins[#wins]), 0, -1, false)
+      T.truthy(lines[1]:find(case[2]), case[1] .. ' produced ' .. lines[1])
+      level.clear()
+    end
   end,
 
   ['panic clears the screen and goes silent'] = function()

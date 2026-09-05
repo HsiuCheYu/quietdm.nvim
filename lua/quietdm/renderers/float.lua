@@ -20,7 +20,7 @@ function float:render(msgs, ctx)
   local lines = {}
   for _, msg in ipairs(msgs) do
     local who = msg.own and 'you' or (msg.display or '')
-    lines[#lines + 1] = string.format('%s   %s', who, os.date('%H:%M', msg.ts))
+    lines[#lines + 1] = string.format('%s   %s', who, ctx.time(msg.ts))
     lines[#lines + 1] = '  ' .. (msg.body or '')
   end
   if #lines == 0 then
