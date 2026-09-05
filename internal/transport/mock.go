@@ -26,11 +26,8 @@ type Mock struct {
 	mu    sync.RWMutex
 	rooms []Room
 
-	seq    atomic.Int64
-	events chan Event
-
-	closeOnce sync.Once
-	done      chan struct{}
+	seq  atomic.Int64
+	sink *eventSink
 
 	// now and sleep are swappable so tests do not wait in real time.
 	now   func() time.Time
@@ -47,8 +44,7 @@ func NewMock(cfg config.Mock) *Mock {
 		script: cfg.Msgs,
 		loop:   cfg.Loop,
 		rooms:  rooms,
-		events: make(chan Event, 16),
-		done:   make(chan struct{}),
+		sink:   newEventSink(16),
 		now:    time.Now,
 		sleep:  sleepCtx,
 	}
@@ -73,12 +69,12 @@ func sleepCtx(ctx context.Context, d time.Duration) bool {
 // Start begins replaying the script.
 func (m *Mock) Start(ctx context.Context) (<-chan Event, error) {
 	go m.run(ctx)
-	return m.events, nil
+	return m.sink.events(), nil
 }
 
 func (m *Mock) run(ctx context.Context) {
-	defer close(m.events)
-	m.emit(ctx, Event{Type: EventConnected, Connected: true})
+	defer m.sink.close()
+	m.sink.send(ctx, Event{Type: EventConnected, Connected: true})
 	for {
 		for _, s := range m.script {
 			if !m.sleep(ctx, s.Delay()) {
@@ -98,7 +94,7 @@ func (m *Mock) run(ctx context.Context) {
 				Own:     s.Own,
 				Kind:    kind,
 			}
-			if !m.emit(ctx, Event{Type: EventMessage, Message: msg}) {
+			if !m.sink.send(ctx, Event{Type: EventMessage, Message: msg}) {
 				return
 			}
 		}
@@ -107,22 +103,10 @@ func (m *Mock) run(ctx context.Context) {
 			// nothing left to say is not a disconnected transport.
 			select {
 			case <-ctx.Done():
-			case <-m.done:
+			case <-m.sink.stopped:
 			}
 			return
 		}
-	}
-}
-
-// emit hands an event to the session layer, giving up if the context ends.
-func (m *Mock) emit(ctx context.Context, ev Event) bool {
-	select {
-	case <-ctx.Done():
-		return false
-	case <-m.done:
-		return false
-	case m.events <- ev:
-		return true
 	}
 }
 
@@ -147,7 +131,7 @@ func (m *Mock) Send(ctx context.Context, roomID, body string) (string, error) {
 		Own:     true,
 		Kind:    model.KindText,
 	}
-	if !m.emit(ctx, Event{Type: EventMessage, Message: msg}) {
+	if !m.sink.send(ctx, Event{Type: EventMessage, Message: msg}) {
 		return "", ctx.Err()
 	}
 	return id, nil
@@ -181,9 +165,9 @@ func (m *Mock) knows(roomID string) bool {
 	return false
 }
 
-// Close stops any in-flight emit. The event channel is closed by run once the
+// Close stops any in-flight send. The event channel is closed by run once the
 // context is cancelled.
 func (m *Mock) Close() error {
-	m.closeOnce.Do(func() { close(m.done) })
+	m.sink.close()
 	return nil
 }

@@ -73,10 +73,9 @@ type Matrix struct {
 	crypto *cryptohelper.CryptoHelper
 	db     *dbutil.Database
 
-	events chan Event
+	sink *eventSink
 
 	closeOnce sync.Once
-	closed    chan struct{}
 
 	// sawConnected records that the link came up during the current attempt,
 	// so the reconnect backoff starts over rather than climbing forever.
@@ -122,11 +121,10 @@ func NewMatrix(opts MatrixOptions) (*Matrix, error) {
 	}
 
 	m := &Matrix{
-		opts:   opts,
-		log:    opts.Log,
-		cli:    cli,
-		events: make(chan Event, 16),
-		closed: make(chan struct{}),
+		opts: opts,
+		log:  opts.Log,
+		cli:  cli,
+		sink: newEventSink(16),
 	}
 
 	db, err := openSessionDB(opts.SessionDB)
@@ -156,21 +154,21 @@ func NewMatrix(opts MatrixOptions) (*Matrix, error) {
 // to babysit.
 func (m *Matrix) Start(ctx context.Context) (<-chan Event, error) {
 	go m.run(ctx)
-	return m.events, nil
+	return m.sink.events(), nil
 }
 
 // run brings the connection up and keeps it up, backing off between attempts.
 // A connection problem never reaches the screen; it only moves the connected
 // flag (invariant I3).
 func (m *Matrix) run(ctx context.Context) {
-	defer close(m.events)
+	defer m.sink.close()
 	backoff := m.opts.MinBackoff
 	for ctx.Err() == nil {
 		err := m.connect(ctx)
 		if ctx.Err() != nil {
 			return
 		}
-		m.setConnected(false)
+		m.setConnected(ctx, false)
 		if errors.Is(err, mautrix.MUnknownToken) {
 			// A rejected token will be rejected again a second later. Stop,
 			// and let the daemon keep serving with connected = false.
@@ -308,7 +306,6 @@ func (m *Matrix) roomDisplay(ctx context.Context, roomID id.RoomID) string {
 func (m *Matrix) Close() error {
 	var err error
 	m.closeOnce.Do(func() {
-		close(m.closed)
 		if m.crypto != nil {
 			err = m.crypto.Close()
 		}
@@ -333,7 +330,7 @@ func (m *Matrix) onMessage(ctx context.Context, evt *event.Event) {
 	if content == nil {
 		return
 	}
-	m.emit(Event{Type: EventMessage, Message: model.Message{
+	m.sink.send(ctx, Event{Type: EventMessage, Message: model.Message{
 		Room:   string(evt.RoomID),
 		Event:  string(evt.ID),
 		Sender: string(evt.Sender),
@@ -362,7 +359,7 @@ func kindOf(evt *event.Event, content *event.MessageEventContent) string {
 	}
 }
 
-func (m *Matrix) setConnected(state bool) {
+func (m *Matrix) setConnected(ctx context.Context, state bool) {
 	if state {
 		m.sawConnected.Store(true)
 	}
@@ -371,16 +368,7 @@ func (m *Matrix) setConnected(state bool) {
 	m.connected = state
 	m.mu.Unlock()
 	if changed {
-		m.emit(Event{Type: EventConnected, Connected: state})
-	}
-}
-
-// emit hands an event to the session layer, dropping it if the transport is
-// already closed. A blocked send here would wedge the sync loop.
-func (m *Matrix) emit(ev Event) {
-	select {
-	case m.events <- ev:
-	case <-m.closed:
+		m.sink.send(ctx, Event{Type: EventConnected, Connected: state})
 	}
 }
 
@@ -405,7 +393,7 @@ func newQuietSyncer(m *Matrix) *quietSyncer {
 		s.mu.Lock()
 		s.backoff = s.m.opts.MinBackoff
 		s.mu.Unlock()
-		m.setConnected(true)
+		m.setConnected(ctx, true)
 		return true
 	})
 	s.OnEventType(event.EventMessage, m.onMessage)
@@ -417,7 +405,9 @@ func newQuietSyncer(m *Matrix) *quietSyncer {
 // delay, rather than letting one failed request tear the whole sync down. A
 // rejected access token is the exception: retrying that just fails again.
 func (s *quietSyncer) OnFailedSync(res *mautrix.RespSync, err error) (time.Duration, error) {
-	s.m.setConnected(false)
+	// mautrix does not hand a context to this hook; the sink's own stop signal
+	// is what keeps the send from outliving the transport.
+	s.m.setConnected(context.Background(), false)
 	if errors.Is(err, mautrix.MUnknownToken) {
 		return 0, err
 	}
