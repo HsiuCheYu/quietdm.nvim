@@ -83,6 +83,8 @@ function M.load_builtins()
   require('quietdm.renderers.float')
   require('quietdm.renderers.quickfix')
   require('quietdm.composers.cmdline')
+  require('quietdm.composers.gitcommit')
+  require('quietdm.composers.prompt')
   require('quietdm.notifiers.statusline')
 end
 
