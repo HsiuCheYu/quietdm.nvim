@@ -1,0 +1,70 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Tag to build (must already exist)
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  binaries:
+    name: Build and publish
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+          # git describe needs the tags to produce a version string.
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache: true
+
+      # A release binary that fails the test suite is worse than no release.
+      - run: make vet
+      - run: make test-go
+
+      - name: Build every target
+        run: |
+          set -eu
+          version=$(git describe --tags --always)
+          mkdir -p dist
+          # No version in the file names, so that
+          # releases/latest/download/quietdmd-linux-amd64 is a stable URL the
+          # README can point at. The version is in the tag and in -version.
+          for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64; do
+            goos=${target%/*}
+            goarch=${target#*/}
+            out="dist/quietdmd-$goos-$goarch"
+            # goolm is the pure-Go Olm implementation: no cgo, so these
+            # binaries cross-compile and need nothing installed to run.
+            CGO_ENABLED=0 GOOS=$goos GOARCH=$goarch \
+              go build -tags goolm -trimpath \
+                -ldflags "-s -w -X main.version=$version" \
+                -o "$out" ./cmd/quietdmd
+            echo "built $out"
+          done
+          cd dist && sha256sum quietdmd-* > SHA256SUMS && cat SHA256SUMS
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.tag || github.ref_name }}
+          files: dist/*
+          fail_on_unmatched_files: true
+          body: |
+            前端請用 plugin manager 裝這個 repo；下面的檔案只有 daemon。
+
+            ```sh
+            curl -LO https://github.com/HsiuCheYu/quietdm.nvim/releases/latest/download/quietdmd-linux-amd64
+            install -m 755 quietdmd-linux-amd64 ~/.local/bin/quietdmd
+            ```
+
+            自己編的話請用 `make build`，或 `go build -tags goolm ./cmd/quietdmd`。
+            少了那個 tag，mautrix-go 會去連 libolm。
