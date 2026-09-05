@@ -60,3 +60,21 @@ func (c Config) StateDBPath() string {
 	}
 	return filepath.Join(StateDir(), "state.db")
 }
+
+// MatrixSessionDBPath returns the database holding the sync position and the
+// crypto store. Default: $XDG_STATE_HOME/quietdm/matrix.db.
+func (c Config) MatrixSessionDBPath() string {
+	if c.Matrix.SessionDB != "" {
+		return c.Matrix.SessionDB
+	}
+	return filepath.Join(StateDir(), "matrix.db")
+}
+
+// PickleKeyPath returns the file holding the key that encrypts the crypto
+// store at rest. Default: $XDG_STATE_HOME/quietdm/pickle.key.
+func (c Config) PickleKeyPath() string {
+	if c.Matrix.PickleKeyFile != "" {
+		return c.Matrix.PickleKeyFile
+	}
+	return filepath.Join(StateDir(), "pickle.key")
+}

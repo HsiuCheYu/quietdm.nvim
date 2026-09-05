@@ -491,3 +491,43 @@ func TestPickleKeyRejectsAWrongSizedFile(t *testing.T) {
 		t.Fatal("a truncated key file must be reported, not silently replaced")
 	}
 }
+
+// systemd will start the daemon and the homeserver in the same second. A
+// daemon that dies because the network is not up yet is a daemon the user has
+// to babysit, so neither Start nor Rooms may fail on an unreachable server.
+func TestMatrixStartsWithoutAReachableHomeserver(t *testing.T) {
+	hs := newFakeHomeserver(t)
+	m := newTestMatrix(t, hs, "")
+	hs.Close() // nothing is listening any more
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	if _, err := m.Start(ctx); err != nil {
+		t.Fatalf("Start must not fail on an unreachable homeserver: %v", err)
+	}
+	rooms, err := m.Rooms(ctx)
+	if err != nil {
+		t.Fatalf("Rooms must not fail on an unreachable homeserver: %v", err)
+	}
+	if len(rooms) != 0 {
+		t.Fatalf("rooms = %+v", rooms)
+	}
+}
+
+// A room list fetched once must survive the homeserver going away, or a
+// reconnect would leave the frontend unable to reply to anyone.
+func TestMatrixKeepsTheLastKnownRoomList(t *testing.T) {
+	hs := newFakeHomeserver(t)
+	m := newTestMatrix(t, hs, "")
+	if _, err := m.Rooms(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	hs.Close()
+	rooms, err := m.Rooms(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rooms) != 1 || rooms[0].Display != testPeer {
+		t.Fatalf("rooms = %+v", rooms)
+	}
+}

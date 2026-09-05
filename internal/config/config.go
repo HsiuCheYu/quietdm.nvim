@@ -47,7 +47,18 @@ type Transport struct {
 type Matrix struct {
 	Homeserver string `toml:"homeserver"`
 	UserID     string `toml:"user_id"`
-	TokenFile  string `toml:"token_file"`
+	// DeviceID may be left empty: the homeserver knows which device issued
+	// the access token, and the daemon asks it at startup.
+	DeviceID  string `toml:"device_id"`
+	TokenFile string `toml:"token_file"`
+	// Encrypt turns on Olm/Megolm and defaults to true. Every room a bridge
+	// creates is encrypted, so turning this off means reading nothing.
+	Encrypt bool `toml:"encrypt"`
+	// SessionDB overrides $XDG_STATE_HOME/quietdm/matrix.db, which holds the
+	// sync position and the crypto store.
+	SessionDB string `toml:"session_db"`
+	// PickleKeyFile overrides $XDG_STATE_HOME/quietdm/pickle.key.
+	PickleKeyFile string `toml:"pickle_key_file"`
 }
 
 // Sanitize controls the text filter applied before broadcasting.
@@ -102,6 +113,7 @@ func Default() Config {
 	return Config{
 		Daemon:    Daemon{HistoryCapacity: 500, Store: "sqlite"},
 		Transport: Transport{Kind: "mock"},
+		Matrix:    Matrix{Encrypt: true},
 		Aliases:   map[string]string{},
 		Sanitize:  Sanitize{StripEmoji: true, MaxBody: 8192},
 		Mock:      defaultMock(),
@@ -154,7 +166,36 @@ func Load(path string) (Config, error) {
 	if md.IsDefined("mock", "loop") {
 		out.Mock.Loop = file.Mock.Loop
 	}
+	if md.IsDefined("matrix", "encrypt") {
+		out.Matrix.Encrypt = file.Matrix.Encrypt
+	}
 	return out, nil
+}
+
+// mergeMatrix overlays the file's [matrix] section onto the defaults. Encrypt
+// is handled by the caller, which has the metadata needed to tell a false in
+// the file from an absent key.
+func mergeMatrix(base, file Matrix) Matrix {
+	out := base
+	if file.Homeserver != "" {
+		out.Homeserver = file.Homeserver
+	}
+	if file.UserID != "" {
+		out.UserID = file.UserID
+	}
+	if file.DeviceID != "" {
+		out.DeviceID = file.DeviceID
+	}
+	if file.TokenFile != "" {
+		out.TokenFile = file.TokenFile
+	}
+	if file.SessionDB != "" {
+		out.SessionDB = file.SessionDB
+	}
+	if file.PickleKeyFile != "" {
+		out.PickleKeyFile = file.PickleKeyFile
+	}
+	return out
 }
 
 func merge(base, file Config) Config {
@@ -174,7 +215,7 @@ func merge(base, file Config) Config {
 	if file.Transport.Kind != "" {
 		out.Transport.Kind = file.Transport.Kind
 	}
-	out.Matrix = file.Matrix
+	out.Matrix = mergeMatrix(out.Matrix, file.Matrix)
 	if len(file.Aliases) > 0 {
 		out.Aliases = file.Aliases
 	}
@@ -202,7 +243,12 @@ func (c Config) Validate() error {
 			}
 		}
 	case "matrix":
-		return fmt.Errorf("transport %q is not implemented yet (M2)", c.Transport.Kind)
+		if c.Matrix.Homeserver == "" {
+			return fmt.Errorf("transport matrix needs [matrix] homeserver")
+		}
+		if c.Matrix.UserID == "" {
+			return fmt.Errorf("transport matrix needs [matrix] user_id")
+		}
 	default:
 		return fmt.Errorf("unknown transport %q", c.Transport.Kind)
 	}

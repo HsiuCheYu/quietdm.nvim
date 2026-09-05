@@ -65,7 +65,7 @@ func run() error {
 		return err
 	}
 
-	tr, err := newTransport(cfg)
+	tr, err := newTransport(cfg, log, *verbose)
 	if err != nil {
 		return err
 	}
@@ -134,10 +134,26 @@ func newStore(cfg config.Config) (store.Store, error) {
 	}
 }
 
-func newTransport(cfg config.Config) (transport.Transport, error) {
+func newTransport(cfg config.Config, log *slog.Logger, verbose bool) (transport.Transport, error) {
 	switch cfg.Transport.Kind {
 	case "mock":
 		return transport.NewMock(cfg.Mock), nil
+	case "matrix":
+		token, err := cfg.MatrixToken()
+		if err != nil {
+			return nil, err
+		}
+		return transport.NewMatrix(transport.MatrixOptions{
+			Homeserver:    cfg.Matrix.Homeserver,
+			UserID:        cfg.Matrix.UserID,
+			DeviceID:      cfg.Matrix.DeviceID,
+			Token:         token,
+			Encrypt:       cfg.Matrix.Encrypt,
+			SessionDB:     cfg.MatrixSessionDBPath(),
+			PickleKeyFile: cfg.PickleKeyPath(),
+			Verbose:       verbose,
+			Log:           log,
+		})
 	default:
 		// Validate already rejected anything else; this keeps the switch
 		// honest if a new kind is added without wiring it up.

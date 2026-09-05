@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/rs/zerolog"
@@ -77,8 +78,13 @@ type Matrix struct {
 	closeOnce sync.Once
 	closed    chan struct{}
 
+	// sawConnected records that the link came up during the current attempt,
+	// so the reconnect backoff starts over rather than climbing forever.
+	sawConnected atomic.Bool
+
 	mu        sync.Mutex
 	connected bool
+	rooms     []Room
 }
 
 // NewMatrix builds the transport. It performs no network access: the daemon
@@ -144,27 +150,63 @@ func NewMatrix(opts MatrixOptions) (*Matrix, error) {
 	return m, nil
 }
 
-// Start brings up the connection and begins delivering events.
+// Start begins delivering events. It does not wait for the homeserver: systemd
+// will happily start the daemon and the homeserver in the same second, and a
+// daemon that dies because the network is not up yet is a daemon the user has
+// to babysit.
 func (m *Matrix) Start(ctx context.Context) (<-chan Event, error) {
+	go m.run(ctx)
+	return m.events, nil
+}
+
+// run brings the connection up and keeps it up, backing off between attempts.
+// A connection problem never reaches the screen; it only moves the connected
+// flag (invariant I3).
+func (m *Matrix) run(ctx context.Context) {
+	defer close(m.events)
+	backoff := m.opts.MinBackoff
+	for ctx.Err() == nil {
+		err := m.connect(ctx)
+		if ctx.Err() != nil {
+			return
+		}
+		m.setConnected(false)
+		if errors.Is(err, mautrix.MUnknownToken) {
+			// A rejected token will be rejected again a second later. Stop,
+			// and let the daemon keep serving with connected = false.
+			m.log.Error("matrix: access token rejected, giving up", "err", err)
+			return
+		}
+		if m.sawConnected.Swap(false) {
+			backoff = m.opts.MinBackoff
+		}
+		m.log.Debug("matrix: link down, retrying", "err", err, "in", backoff)
+		if !sleepCtx(ctx, backoff) {
+			return
+		}
+		backoff = min(backoff*2, m.opts.MaxBackoff)
+	}
+}
+
+// connect performs the setup that needs a reachable homeserver and then syncs
+// until something goes wrong. Both halves are retried by the caller.
+func (m *Matrix) connect(ctx context.Context) error {
 	if m.cli.DeviceID == "" {
 		// The device ID has to match the one the access token was issued to,
 		// or the homeserver hands the crypto layer keys for the wrong device.
 		whoami, err := m.cli.Whoami(ctx)
 		if err != nil {
-			return nil, fmt.Errorf("matrix: whoami: %w", err)
+			return fmt.Errorf("matrix: whoami: %w", err)
 		}
 		m.cli.DeviceID = whoami.DeviceID
 		m.log.Debug("matrix device discovered", "device", whoami.DeviceID)
 	}
-
-	if m.opts.Encrypt {
+	if m.opts.Encrypt && m.crypto == nil {
 		if err := m.startCrypto(ctx); err != nil {
-			return nil, err
+			return err
 		}
 	}
-
-	go m.syncLoop(ctx)
-	return m.events, nil
+	return m.cli.SyncWithContext(ctx)
 }
 
 // startCrypto wires up Olm/Megolm. The keys live in the same file as the sync
@@ -187,32 +229,6 @@ func (m *Matrix) startCrypto(ctx context.Context) error {
 	// expect it; without it the daemon would quietly send plaintext.
 	m.cli.Crypto = helper
 	return nil
-}
-
-// syncLoop runs /sync until the context is cancelled, reconnecting with an
-// exponential backoff. Nothing about a connection problem ever reaches the
-// screen: it only moves the connected flag (invariant I3).
-func (m *Matrix) syncLoop(ctx context.Context) {
-	defer close(m.events)
-	backoff := m.opts.MinBackoff
-	for ctx.Err() == nil {
-		err := m.cli.SyncWithContext(ctx)
-		if ctx.Err() != nil {
-			return
-		}
-		m.setConnected(false)
-		if errors.Is(err, mautrix.MUnknownToken) {
-			// A rejected token will be rejected again a second later. Stop,
-			// and let the daemon keep serving with connected = false.
-			m.log.Error("matrix: access token rejected, giving up", "err", err)
-			return
-		}
-		m.log.Debug("matrix: sync stopped, retrying", "err", err, "in", backoff)
-		if !sleepCtx(ctx, backoff) {
-			return
-		}
-		backoff = min(backoff*2, m.opts.MaxBackoff)
-	}
 }
 
 // Send delivers a message. The homeserver echoes it back through /sync, so the
@@ -238,17 +254,30 @@ func (m *Matrix) MarkRead(ctx context.Context, roomID, eventID string) error {
 	return nil
 }
 
-// Rooms lists the joined conversations.
+// Rooms lists the joined conversations. An unreachable homeserver is not an
+// error here: the daemon starts anyway, and a room the user actually talks in
+// arrives with its first message. Failing instead would take the whole daemon
+// down for a homeserver that is thirty seconds late.
 func (m *Matrix) Rooms(ctx context.Context) ([]Room, error) {
 	resp, err := m.cli.JoinedRooms(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("matrix: joined rooms: %w", err)
+		m.log.Debug("matrix: cannot list rooms yet", "err", err)
+		return m.cachedRooms(), nil
 	}
 	out := make([]Room, 0, len(resp.JoinedRooms))
 	for _, roomID := range resp.JoinedRooms {
 		out = append(out, Room{ID: string(roomID), Display: m.roomDisplay(ctx, roomID)})
 	}
+	m.mu.Lock()
+	m.rooms = out
+	m.mu.Unlock()
 	return out, nil
+}
+
+func (m *Matrix) cachedRooms() []Room {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return append([]Room(nil), m.rooms...)
 }
 
 // roomDisplay names a conversation. For the one-to-one rooms this tool is built
@@ -334,6 +363,9 @@ func kindOf(evt *event.Event, content *event.MessageEventContent) string {
 }
 
 func (m *Matrix) setConnected(state bool) {
+	if state {
+		m.sawConnected.Store(true)
+	}
 	m.mu.Lock()
 	changed := m.connected != state
 	m.connected = state
