@@ -29,6 +29,11 @@ type Daemon struct {
 	Socket string `toml:"socket"`
 	// HistoryCapacity is how many messages per room the store keeps.
 	HistoryCapacity int `toml:"history_capacity"`
+	// Store is "sqlite" (the default: history survives a restart) or
+	// "memory" (nothing ever reaches the disk).
+	Store string `toml:"store"`
+	// StateDB overrides the default $XDG_STATE_HOME/quietdm/state.db path.
+	StateDB string `toml:"state_db"`
 }
 
 // Transport selects where messages come from.
@@ -95,7 +100,7 @@ func (m MockMessage) Delay() time.Duration {
 // Default returns the configuration used when no file exists.
 func Default() Config {
 	return Config{
-		Daemon:    Daemon{HistoryCapacity: 500},
+		Daemon:    Daemon{HistoryCapacity: 500, Store: "sqlite"},
 		Transport: Transport{Kind: "mock"},
 		Aliases:   map[string]string{},
 		Sanitize:  Sanitize{StripEmoji: true, MaxBody: 8192},
@@ -160,6 +165,12 @@ func merge(base, file Config) Config {
 	if file.Daemon.HistoryCapacity > 0 {
 		out.Daemon.HistoryCapacity = file.Daemon.HistoryCapacity
 	}
+	if file.Daemon.Store != "" {
+		out.Daemon.Store = file.Daemon.Store
+	}
+	if file.Daemon.StateDB != "" {
+		out.Daemon.StateDB = file.Daemon.StateDB
+	}
 	if file.Transport.Kind != "" {
 		out.Transport.Kind = file.Transport.Kind
 	}
@@ -178,6 +189,11 @@ func merge(base, file Config) Config {
 
 // Validate reports configuration that cannot work.
 func (c Config) Validate() error {
+	switch c.Daemon.Store {
+	case "sqlite", "memory":
+	default:
+		return fmt.Errorf("unknown store %q", c.Daemon.Store)
+	}
 	switch c.Transport.Kind {
 	case "mock":
 		for _, m := range c.Mock.Msgs {

@@ -14,7 +14,10 @@ cleanup() {
 }
 trap cleanup EXIT
 
-"$root/quietdmd" -config "$root/tests/e2e.toml" -socket "$sock" >"$log" 2>&1 &
+# Let the daemon use its real default store, but inside the throwaway
+# directory, so the run exercises SQLite without touching the user's state.
+XDG_STATE_HOME="$rundir/state" \
+	"$root/quietdmd" -config "$root/tests/e2e.toml" -socket "$sock" >"$log" 2>&1 &
 daemon_pid=$!
 
 # Wait for the socket rather than sleeping a guessed amount of time.

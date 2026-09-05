@@ -92,6 +92,23 @@ make run-mock       # daemon + 內建假對話，走預設 socket 路徑
 socket 位於 `$XDG_RUNTIME_DIR/quietdm/sock`（權限 `0600`，目錄 `0700`），
 前端預設就找這條路徑，不必額外設定。
 
+## daemon 的設定
+
+`$XDG_CONFIG_HOME/quietdm/config.toml`，沒有這個檔案也能跑（預設就是 mock 加上一段
+內建假對話）。
+
+```toml
+[daemon]
+store            = "sqlite"  # 預設。訊息記錄存在 $XDG_STATE_HOME/quietdm/state.db
+history_capacity = 500       # 每個對話保留幾則
+```
+
+歷史記錄是必要的：L2 要顯示上下文，而每次都回頭向 homeserver 拉會有延遲，延遲會逼
+你盯著螢幕等——那個「盯著等」的動作本身就很可疑。
+
+資料庫是明文，權限 `0600`。這個工具偽裝的是訊息**在螢幕上的形狀**，不是它在磁碟上
+的狀態。不想留下聊天記錄就設 `store = "memory"`，daemon 一關什麼都不剩。
+
 ## 指令
 
 | 指令 | 作用 |

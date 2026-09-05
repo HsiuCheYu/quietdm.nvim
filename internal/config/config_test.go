@@ -117,6 +117,39 @@ func TestValidate(t *testing.T) {
 	if err := cfg.Validate(); err == nil {
 		t.Error("a mock message without a room must be rejected")
 	}
+	cfg = Default()
+	cfg.Daemon.Store = "postgres"
+	if err := cfg.Validate(); err == nil {
+		t.Error("an unknown store must be rejected")
+	}
+}
+
+func TestStoreDefaultsToSQLite(t *testing.T) {
+	if got := Default().Daemon.Store; got != "sqlite" {
+		t.Errorf("store = %q, want sqlite", got)
+	}
+	path := write(t, `
+[daemon]
+store    = "memory"
+state_db = "/tmp/elsewhere.db"
+`)
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Daemon.Store != "memory" {
+		t.Errorf("store = %q", cfg.Daemon.Store)
+	}
+	if got := cfg.StateDBPath(); got != "/tmp/elsewhere.db" {
+		t.Errorf("state db = %q", got)
+	}
+}
+
+func TestStateDBPathFollowsXDG(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", "/tmp/state")
+	if got := Default().StateDBPath(); got != "/tmp/state/quietdm/state.db" {
+		t.Errorf("got %q", got)
+	}
 }
 
 func TestSocketPath(t *testing.T) {

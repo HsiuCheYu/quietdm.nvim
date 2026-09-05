@@ -71,7 +71,10 @@ func run() error {
 	}
 	defer tr.Close()
 
-	st := store.NewMemory(cfg.Daemon.HistoryCapacity)
+	st, err := newStore(cfg)
+	if err != nil {
+		return err
+	}
 	defer st.Close()
 
 	sess := session.New(tr, st, session.Options{
@@ -88,7 +91,7 @@ func run() error {
 		return err
 	}
 	defer srv.Close()
-	log.Info("listening", "socket", srv.Addr(), "transport", cfg.Transport.Kind)
+	log.Info("listening", "socket", srv.Addr(), "transport", cfg.Transport.Kind, "store", cfg.Daemon.Store)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -114,6 +117,20 @@ func run() error {
 			return err
 		}
 		return nil
+	}
+}
+
+// newStore opens the configured store. The SQLite one keeps history across
+// restarts, which the higher exposure levels need; "memory" is for anyone who
+// would rather leave no chat log on disk.
+func newStore(cfg config.Config) (store.Store, error) {
+	switch cfg.Daemon.Store {
+	case "memory":
+		return store.NewMemory(cfg.Daemon.HistoryCapacity), nil
+	case "sqlite":
+		return store.OpenSQLite(cfg.StateDBPath(), cfg.Daemon.HistoryCapacity)
+	default:
+		return nil, fmt.Errorf("unsupported store %q", cfg.Daemon.Store)
 	}
 }
 

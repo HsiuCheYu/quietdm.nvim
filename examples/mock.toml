@@ -8,6 +8,11 @@
 #
 # Park the cursor on a line of code and wait half a second.
 
+# A demo should not leave a chat log behind, so keep everything in memory.
+# Real use wants the default, "sqlite".
+[daemon]
+store = "memory"
+
 [transport]
 kind = "mock"
 
