@@ -59,9 +59,17 @@ local function install_handlers()
     -- reconnect, the daemon is the source of truth.
     state.reset()
     ipc.send({ t = 'rooms' }, function(reply)
+      if reply.t == 'error' then
+        return
+      end
       for _, room in ipairs(reply.rooms or {}) do
         state.on_room(room)
         ipc.send({ t = 'history', room = room.room, limit = M.config.history }, function(hist)
+          -- A request that never reached the daemon is answered with an
+          -- error, which carries no room and no messages.
+          if hist.t == 'error' then
+            return
+          end
           state.on_history(hist.room, hist.messages)
           refresh_notifier()
         end)
@@ -149,6 +157,11 @@ function M.stop()
   clear_all()
   state.reset()
   refresh_notifier()
+  -- ipc.stop() answers every in-flight request with an error, and those
+  -- callbacks run on the next tick — after the clear above. Without this, the
+  -- last abandoned reply would draw a failed-send hint onto a screen the user
+  -- just asked to be emptied.
+  vim.schedule(clear_all)
 end
 
 ---L2: read the recent conversation in a hover-styled float.
@@ -196,10 +209,18 @@ function M.send_failed()
   end
   local bufnr = vim.api.nvim_get_current_buf()
   local lnum = vim.fn.line('.') - 1
-  ctx.virt_text(bufnr, lnum, { { '  unsaved changes', ctx.hl('hint') } }, { align = 'eol' })
+  local mark = ctx.virt_text(bufnr, lnum, { { '  unsaved changes', ctx.hl('hint') } }, { align = 'eol' })
+  if not mark then
+    return
+  end
+  -- Only this hint goes away. Clearing the namespace would take a glance
+  -- drawn in the meantime with it, which is the same mistake the renderers
+  -- had in the other direction.
   vim.defer_fn(function()
-    ctx_mod.clear_all(bufnr)
-  end, 3000)
+    if vim.api.nvim_buf_is_valid(bufnr) then
+      pcall(vim.api.nvim_buf_del_extmark, bufnr, ctx_mod.namespace(), mark)
+    end
+  end, M.config.level.hint_timeout)
 end
 
 ---Silence for the given number of minutes (default guard.silence_minutes).
