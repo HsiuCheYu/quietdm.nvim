@@ -127,6 +127,16 @@ func TestValidate(t *testing.T) {
 		t.Error("a mock message without a room must be rejected")
 	}
 	cfg = Default()
+	cfg.Mock.Msgs = []MockMessage{{Room: "!undeclared:localhost", Body: "hi"}}
+	if err := cfg.Validate(); err == nil {
+		t.Error("a mock message naming a room with no [[mock.room]] must be rejected")
+	}
+	cfg = Default()
+	cfg.Mock.Rooms = []MockRoom{{Display: "no id"}}
+	if err := cfg.Validate(); err == nil {
+		t.Error("a mock room without an id must be rejected")
+	}
+	cfg = Default()
 	cfg.Daemon.Store = "postgres"
 	if err := cfg.Validate(); err == nil {
 		t.Error("an unknown store must be rejected")
