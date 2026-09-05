@@ -5,3 +5,7 @@
 # Local runtime junk
 *.db
 *.sock
+
+# Self-hosting stack: local state and secrets
+/contrib/docker/data/
+/contrib/docker/.env
