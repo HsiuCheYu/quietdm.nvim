@@ -1,8 +1,9 @@
 // Package store persists conversation state for the daemon.
 //
-// M1 ships the in-memory implementation only; SQLite arrives with M2 (see
-// docs/design/05-roadmap.md). Both satisfy the same interface so the session
-// layer never learns which one it is talking to.
+// Two implementations: SQLite, which keeps history across restarts, and an
+// in-memory one for anyone who would rather leave no chat log on disk. Both
+// satisfy the same interface, so the session layer never learns which one it
+// is talking to.
 package store
 
 import (

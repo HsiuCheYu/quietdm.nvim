@@ -51,3 +51,12 @@ func DefaultConfigPath() string {
 	}
 	return filepath.Join(home, ".config", "quietdm", "config.toml")
 }
+
+// StateDBPath returns the store's database file, honouring an explicit
+// override. Default: $XDG_STATE_HOME/quietdm/state.db.
+func (c Config) StateDBPath() string {
+	if c.Daemon.StateDB != "" {
+		return c.Daemon.StateDB
+	}
+	return filepath.Join(StateDir(), "state.db")
+}

@@ -106,9 +106,12 @@ type Store interface {
 }
 ```
 
-M1 只有記憶體實作（每個 room 保留固定筆數，滿了丟最舊的）；M2 換成 SQLite，
-單一檔案 `$XDG_STATE_HOME/quietdm/state.db`。未讀數由已讀位置推導而非另存計數，
-這樣即使 `mark_read` 亂序抵達也不會出現負數。
+兩個實作都在：記憶體版（每個 room 保留固定筆數，滿了丟最舊的），以及 SQLite 版
+——單一檔案 `$XDG_STATE_HOME/quietdm/state.db`，權限 `0600`，預設就是它。未讀數由
+已讀位置推導而非另存計數，這樣即使 `mark_read` 亂序抵達也不會出現負數。
+
+訊息在資料庫裡是明文。隱晦模型保護的是訊息**在螢幕上的形狀**，不是它在磁碟上的
+狀態；不想在磁碟留下聊天記錄的人請改用 `store = "memory"`。
 
 **保留訊息歷史是必要的**：L2/L3 需要顯示上下文，而重新向 homeserver 拉取歷史會有延遲，延遲會逼使用者盯著螢幕等——那個「盯著等」的動作本身就很可疑。
 
@@ -176,6 +179,11 @@ lua/quietdm/
 daemon：`$XDG_CONFIG_HOME/quietdm/config.toml`
 
 ```toml
+[daemon]
+store            = "sqlite"  # 或 "memory"（什麼都不落地）
+history_capacity = 500       # 每個 room 保留的訊息數
+# state_db = "..."           # 預設 $XDG_STATE_HOME/quietdm/state.db
+
 [matrix]
 homeserver   = "http://localhost:8008"
 user_id      = "@me:localhost"
