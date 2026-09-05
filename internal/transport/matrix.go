@@ -335,9 +335,12 @@ func (m *Matrix) onMessage(ctx context.Context, evt *event.Event) {
 		Event:  string(evt.ID),
 		Sender: string(evt.Sender),
 		Body:   content.Body,
-		TS:     evt.Timestamp,
-		Own:    evt.Sender == m.cli.UserID,
-		Kind:   kindOf(evt, content),
+		// Matrix counts in milliseconds; the IPC protocol counts in Unix
+		// seconds (docs/design/03-ipc-protocol.md). Getting this wrong makes
+		// every message read "剛剛" forever.
+		TS:   evt.Timestamp / 1000,
+		Own:  evt.Sender == m.cli.UserID,
+		Kind: kindOf(evt, content),
 	}})
 }
 

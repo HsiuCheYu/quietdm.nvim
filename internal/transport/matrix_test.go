@@ -268,8 +268,9 @@ func TestMatrixDeliversTimelineMessages(t *testing.T) {
 		Event:  "$1",
 		Sender: testPeer,
 		Body:   "晚上要吃什麼",
-		TS:     1757000000000,
-		Kind:   model.KindText,
+		// Matrix counts milliseconds, the IPC protocol counts Unix seconds.
+		TS:   1757000000,
+		Kind: model.KindText,
 	}
 	if ev.Message != want {
 		t.Fatalf("got %+v, want %+v", ev.Message, want)
