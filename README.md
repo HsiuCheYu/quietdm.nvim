@@ -141,7 +141,7 @@ history_capacity = 500       # 每個對話保留幾則
 |---|---|
 | `:QuietdmStart` / `:QuietdmStop` | 連線 / 斷線 |
 | `:QuietdmRead` | 升到 L2（hover 樣式浮動視窗） |
-| `:QuietdmPanorama` | 升到 L3（quickfix，M3 才有 renderer） |
+| `:QuietdmPanorama` | 升到 L3（quickfix 列表） |
 | `:QuietdmReply` | 開啟 composer |
 | `:QuietdmSilence [分鐘]` | 手動靜默（開會、螢幕分享前用） |
 | `:QuietdmPanic` | 清空並靜默 |
@@ -154,6 +154,37 @@ statusline 的暗號要自己插進去，外掛不會接管你的 statusline：
 sections = { lualine_x = { function() return require('quietdm').token() end } }
 ```
 
+## 換一套偽裝
+
+哪一種偽裝比較安靜，取決於你的畫面本來就有什麼。預設是 `blame`——如果你沒有
+gitsigns 但有一個很吵的 language server，`diagnostic` 反而更不起眼：
+
+```lua
+require('quietdm').setup {
+  renderers = { glance = 'diagnostic', read = 'float', panorama = 'quickfix' },
+}
+```
+
+| renderer | 等級 | 長相 |
+|---|---|---|
+| `blame` | L1 | 游標行右對齊：`m.chen · 3 分鐘前 · 晚上要吃什麼` |
+| `diagnostic` | L1 | 行尾提示：`■ m.chen: 晚上要吃什麼` |
+| `float` | L2 | LSP hover 樣式浮動視窗 |
+| `quickfix` | L3 | `internal/mia/mia.go|142 col 3| m.chen: 晚上要吃什麼` |
+
+L3 的檔名與行號都是道具，能對它們動作的按鍵在那個 buffer 裡都被綁成空的——不然
+`<CR>` 會把你丟進一個不存在的檔案。
+
+composer 也可以換：
+
+| composer | 說明 |
+|---|---|
+| `cmdline` | **預設。** 在 cmdline 打字，提示符偽裝成替換指令 |
+| `prompt` | LSP rename 樣式的單行浮動輸入框 |
+| `gitcommit` | `filetype=gitcommit` 的 scratch buffer，`:w` 送出、關掉視窗取消。長回覆用 |
+
+自己寫一個也可以，介面見 [04-plugin-api](docs/design/04-plugin-api.md)。
+
 ## 開發
 
 ```sh
@@ -163,9 +194,11 @@ make test-lua
 make test-e2e       # 真的把 daemon 與 nvim 接起來跑完一輪
 ```
 
-`tests/spec/invariants_spec.lua` 會掃描原始碼，確認沒有任何模組呼叫會寫入
-buffer、插入虛擬行或彈出通知的 API——那些是[隱晦模型](docs/design/01-covert-model.md)
-的硬性規則，不該靠人工審查來守。
+不變式有兩道檢查，都不靠人工審查：`tests/spec/invariants_spec.lua` 掃描原始碼，確認
+沒有任何模組**寫得出**會改 buffer、插虛擬行或彈通知的呼叫；
+`tests/spec/runtime_invariants_spec.lua` 則在 API 上裝攔截器，把 L1→L3、回覆、panic
+整條流程跑一遍，確認沒有任何模組**真的走到**那裡——包裝過一層、查表叫出來、或交給
+別的函式庫去做的，靜態掃描是看不到的。
 
 ## 文件
 

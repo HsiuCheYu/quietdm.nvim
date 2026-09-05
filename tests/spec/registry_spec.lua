@@ -17,7 +17,9 @@ return {
   ['builtins register themselves'] = function()
     registry.load_builtins()
     T.truthy(registry.get_renderer('blame', 'glance'))
+    T.truthy(registry.get_renderer('diagnostic', 'glance'))
     T.truthy(registry.get_renderer('float', 'read'))
+    T.truthy(registry.get_renderer('quickfix', 'panorama'))
     T.truthy(registry.composers.cmdline)
     T.truthy(registry.notifiers.statusline)
   end,

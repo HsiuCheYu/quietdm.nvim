@@ -165,6 +165,72 @@ return {
     end
   end,
 
+  -- A quickfix list needs no disguise: it is already a screenful of text with
+  -- names and line numbers in it. What it does need is for the props to stay
+  -- props (01-covert-model.md section 3).
+  ['panorama fills a quickfix list that reads as a lint report'] = function()
+    fresh({ renderers = { panorama = 'quickfix' } })
+    local user_win = vim.api.nvim_get_current_win()
+    arrive('晚上要吃什麼')
+    arrive('七點好嗎', { own = true, display = 'me' })
+
+    level.panorama()
+    T.eq(level.current, 'L3')
+    local qf = vim.fn.getqflist({ items = 1, title = 1 })
+    T.eq(#qf.items, 2)
+    T.eq(qf.title, 'diagnostics', 'the window title has to read as something ordinary')
+
+    local text = vim.fn.getqflist({ items = 1 }).items[1].text
+    T.truthy(text:find('m.chen: 晚上要吃什麼', 1, true), 'got ' .. text)
+    T.eq(vim.fn.getqflist({ items = 1 }).items[2].text, 'you: 七點好嗎')
+
+    -- Every entry is invalid, so :cnext cannot walk into a file that is not
+    -- there, and the keys that act on an entry are bound to nothing.
+    for _, item in ipairs(qf.items) do
+      T.eq(item.valid, 0, 'entries must not be navigable')
+    end
+    local qfwin
+    for _, w in ipairs(vim.api.nvim_list_wins()) do
+      if vim.bo[vim.api.nvim_win_get_buf(w)].buftype == 'quickfix' then
+        qfwin = w
+      end
+    end
+    T.truthy(qfwin, 'the quickfix window is open')
+    local maps = vim.api.nvim_buf_get_keymap(vim.api.nvim_win_get_buf(qfwin), 'n')
+    local blocked = {}
+    for _, m in ipairs(maps) do
+      blocked[m.lhs] = true
+    end
+    T.truthy(blocked['<CR>'], 'the jump key must be intercepted')
+
+    -- Opening the list is not the same as moving the user into it (I2).
+    T.eq(vim.api.nvim_get_current_win(), user_win, 'the cursor stays where it was')
+
+    level.clear()
+    T.falsy(vim.api.nvim_win_is_valid(qfwin), 'clear closes the window it opened')
+    T.eq(#vim.fn.getqflist(), 0, 'and leaves no props behind in the list')
+  end,
+
+  ['the diagnostic renderer draws an lsp-styled hint at end of line'] = function()
+    local buf = fresh({ renderers = { glance = 'diagnostic' } })
+    local before = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
+    arrive('晚上要吃什麼')
+    level.glance()
+
+    local m = marks(buf)
+    T.eq(#m, 1)
+    local details = m[1][4]
+    T.eq(details.virt_text_pos, 'eol', 'a diagnostic sits after the code, not at the margin')
+    T.falsy(details.virt_lines, 'no virt_lines: the layout must not move (I2)')
+    local text = details.virt_text[1][1]
+    T.truthy(text:find('m.chen: 晚上要吃什麼', 1, true), 'got ' .. text)
+    T.eq(details.virt_text[1][2], 'DiagnosticVirtualTextHint')
+    T.eq(vim.api.nvim_buf_get_lines(buf, 0, -1, false), before, 'buffer text is untouched (I1)')
+
+    level.hide_glance()
+    T.eq(#marks(buf), 0)
+  end,
+
   ['panic clears the screen and goes silent'] = function()
     local buf = fresh()
     arrive('hi')
