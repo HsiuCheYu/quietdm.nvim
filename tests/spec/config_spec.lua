@@ -31,22 +31,36 @@ return {
   -- The daemon's last resort is Go's os.TempDir(): $TMPDIR with trailing
   -- slashes stripped, else /tmp. If the two sides disagree on the path the
   -- frontend simply never connects — silently, because that is what this
-  -- plugin does with connection failures. scripts/e2e.sh compares the two
-  -- implementations directly; this only covers the string handling.
-  ['the last-resort socket path mirrors Go os.TempDir'] = function()
-    local uid = (vim.uv or vim.loop).getuid()
-    if vim.fn.isdirectory('/run/user/' .. uid) == 1 then
-      return -- this machine never reaches the temp-dir fallback
-    end
-    local xdg, tmp = vim.env.XDG_RUNTIME_DIR, vim.env.TMPDIR
-    vim.env.XDG_RUNTIME_DIR = ''
+  -- plugin does with connection failures.
+  --
+  -- Tested against temp_dir() directly rather than through socket_path,
+  -- because on a machine with /run/user/$UID the fallback is never reached
+  -- and a test that goes through socket_path would quietly verify nothing.
+  ['the temp-dir fallback mirrors Go os.TempDir'] = function()
+    local tmp = vim.env.TMPDIR
 
     vim.env.TMPDIR = ''
-    T.eq(config.socket_path(config.build()), '/tmp/quietdm/sock')
+    T.eq(config.temp_dir(), '/tmp')
+
+    vim.env.TMPDIR = '/var/tmp/mine'
+    T.eq(config.temp_dir(), '/var/tmp/mine')
 
     vim.env.TMPDIR = '/var/tmp/mine///'
-    T.eq(config.socket_path(config.build()), '/var/tmp/mine/quietdm/sock')
+    T.eq(config.temp_dir(), '/var/tmp/mine', 'trailing slashes are stripped')
 
-    vim.env.XDG_RUNTIME_DIR, vim.env.TMPDIR = xdg, tmp
+    vim.env.TMPDIR = '/'
+    T.eq(config.temp_dir(), '/', 'but never down to nothing')
+
+    vim.env.TMPDIR = tmp
+  end,
+
+  -- Go joins path elements with exactly one separator whatever the directory
+  -- ends in; string concatenation does not.
+  ['a runtime dir with a trailing slash still gives one separator'] = function()
+    local saved = vim.env.XDG_RUNTIME_DIR
+    vim.env.XDG_RUNTIME_DIR = '/run/user/test///'
+    local path = config.socket_path(config.build())
+    vim.env.XDG_RUNTIME_DIR = saved
+    T.eq(path, '/run/user/test/quietdm/sock')
   end,
 }
