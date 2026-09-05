@@ -2,10 +2,10 @@
 
 在 Neovim 裡收發即時訊息，而畫面在旁人眼中仍然是一個正常的編輯器。
 
-> ⚠️ M2 的程式碼已到位：Matrix transport（含 E2EE）、SQLite 記錄、systemd 範本，
-> 加上 M1 的前端 L0–L2 與 mock transport。**但兩個里程碑的驗收都還沒做**——那需要
-> 真的用一整天、真的跟一個人聊完一段完整對話，不是測試能代替的。自架 homeserver
-> 與 bridge 的教學是 M4 的事。
+> ⚠️ 程式碼到 M4 都寫完了：前端 L0–L3、Matrix transport（含 E2EE）、SQLite 記錄、
+> systemd 與 docker-compose 範本、release binary。**但驗收都還沒做**——那需要真的用
+> 一整天、真的跟一個人聊完一段完整對話，不是測試能代替的。自架那套 compose 也還沒
+> 有人從頭跑過一遍。
 
 ## 它長什麼樣子
 
@@ -65,21 +65,24 @@ Homeserver 與 bridge 由使用者自架，訊息不經過第三方服務。
 `setup()` 不會連線，也不會自動啟動 daemon——一個外掛在你不知情時建立網路連線，
 是不能接受的行為。
 
-daemon 自己編：
+daemon 有三條路，挑一條：
 
 ```sh
+# 一、下載 release binary（不需要 Go）
+curl -LO https://github.com/HsiuCheYu/quietdm.nvim/releases/latest/download/quietdmd-linux-amd64
+install -m 755 quietdmd-linux-amd64 ~/.local/bin/quietdmd
+
+# 二、go install
+go install -tags goolm github.com/HsiuCheYu/quietdm.nvim/cmd/quietdmd@latest
+
+# 三、自己編
 git clone https://github.com/HsiuCheYu/quietdm.nvim
-cd quietdm.nvim
-make build          # 產生 ./quietdmd
+cd quietdm.nvim && make build      # 產生 ./quietdmd
 ```
 
-請用 `make build`，不要直接 `go build`。mautrix-go 預設連 libolm（C 函式庫），
-`make` 會帶上 `-tags goolm` 改用純 Go 的實作，daemon 才會是一個不需要 cgo 的單一
-執行檔。要自己下指令的話：
-
-```sh
-go build -tags goolm ./cmd/quietdmd
-```
+**`-tags goolm` 不能漏掉。** mautrix-go 預設連 libolm（一個 C 函式庫），少了這個
+tag，`go build` 會抱怨找不到 `olm/olm.h`。加上之後用的是純 Go 的實作，daemon 就是
+一個不需要 cgo 的單一執行檔。`make build` 已經帶了。
 
 ## 先跑跑看（不需要 Matrix）
 
@@ -102,13 +105,17 @@ make run-mock       # daemon + 內建假對話，走預設 socket 路徑
 socket 位於 `$XDG_RUNTIME_DIR/quietdm/sock`（權限 `0600`，目錄 `0700`），
 前端預設就找這條路徑，不必額外設定。
 
-## 接上 Matrix
+## 接上真的 IG
 
-daemon 認得的只有 Matrix；IG 那一段由自架的 mautrix-meta bridge 負責。取得 access
-token、把它放在哪裡、E2EE 的 device 在別的 client 眼中為什麼是未驗證的，以及這些
-到底防得了什麼防不了什麼，都寫在 [docs/matrix-setup.md](docs/matrix-setup.md)。
+兩份文件，照順序走：
 
-最短版本：
+1. **[docs/self-host.md](docs/self-host.md)** — 用 `contrib/docker/compose.yaml`
+   把 Synapse 與 mautrix-instagram 架起來。沒有 federation、沒有 TLS、沒有對外的
+   port：唯一的 client 是同一台機器上的 daemon。
+2. **[docs/matrix-setup.md](docs/matrix-setup.md)** — 取得 access token、把它放在哪
+   裡、E2EE 的 device 在別的 client 眼中為什麼是未驗證的。
+
+已經有 homeserver 的話，最短版本：
 
 ```sh
 export QUIETDM_TOKEN=syt_...
@@ -210,13 +217,21 @@ make test-e2e       # 真的把 daemon 與 nvim 接起來跑完一輪
 | [03-ipc-protocol](docs/design/03-ipc-protocol.md) | daemon 與前端的 NDJSON 協定 |
 | [04-plugin-api](docs/design/04-plugin-api.md) | Renderer / Composer / Notifier 介面 |
 | [05-roadmap](docs/design/05-roadmap.md) | 開發里程碑 |
+| [self-host](docs/self-host.md) | 自架 Synapse 與 IG bridge 的逐步教學 |
 | [matrix-setup](docs/matrix-setup.md) | 接上 homeserver、token、E2EE 與已知限制 |
+| [threat-model](docs/threat-model.md) | **它不防什麼**，以及明文放在磁碟的哪裡 |
 
 ## 它不做什麼
 
-- 不對抗會認真讀你螢幕的人
-- 不對抗公司的監控軟體與螢幕錄影
+quietdm 防的是**餘光**，不是**注意力**。
+
+- 不對抗會認真讀你螢幕的人——訊息是明文，就在那裡
+- 不對抗公司的監控軟體與螢幕錄影——畫面上有明文，錄影裡就有明文
 - 不隱藏 IG 端的行為（對方看到的仍是正常已讀）
 - 不做圖片、語音、貼圖
+- 訊息記錄以明文存在磁碟上（`0600`，可以關掉）
+
+完整版本、以及最可能害你出事的四種失敗方式，見
+[威脅模型](docs/threat-model.md)。
 
 本工具可能違反你所屬組織的規範。是否使用、在什麼場合使用，由使用者自行判斷與承擔。

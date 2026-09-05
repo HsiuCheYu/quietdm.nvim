@@ -63,12 +63,18 @@ idle timer 與 `VimResized` 自動降級、`:QuietdmDebug` 與 IPC 環形記錄�
 入**使用者正在編輯的 buffer**，不是任何 buffer——L2 借用的 LSP hover 視窗就是往自己
 的 scratch buffer 寫，那正是它的用法。
 
-## M4 — 讓別人裝得起來
+## M4 — 讓別人裝得起來　*程式與文件完成，教學未實測*
 
-- mautrix-meta + homeserver 的 `docker-compose` 範本與逐步教學
-- daemon 的 release binary 與 `go install` 說明
+- mautrix-instagram + Synapse 的 `docker-compose` 範本（`contrib/docker/`）與逐步
+  教學（[self-host.md](../self-host.md)）
+- daemon 的 release binary（`.github/workflows/release.yml`，四個平台）與
+  `go install` 說明
 - README 的完整安裝流程
-- 已知限制與威脅模型的使用者說明（誠實寫出不防什麼）
+- [威脅模型](../threat-model.md)：誠實寫出不防什麼，以及明文落在磁碟的哪裡
+
+那套 compose **沒有真的從頭跑過一遍**——手上沒有 IG 帳號可以測。每個指令與設定欄位
+都對照過 Synapse 與 mautrix-meta 上游的原始碼與官方 Dockerfile，但順序或權限上仍可
+能需要調整。這件事在文件開頭就寫明了。
 
 ## 之後可能做的
 
