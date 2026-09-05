@@ -11,8 +11,14 @@ M.order = {} -- room ids, most recently active first
 M.messages = {} -- room id -> quietdm.Message[], oldest first
 M.seen = {} -- event id -> true, for de-duplication
 M.glanced = {} -- event id -> true, messages the user has already been shown
+M.id_count = 0 -- how many IDs have been remembered since the last prune
 
 local history_limit = 50
+
+-- Above this many remembered event IDs, the de-duplication tables are rebuilt
+-- from the messages actually still held. Without it they grow for as long as
+-- the editor stays open, which for this plugin is all day.
+local id_limit = 5000
 
 ---@param limit integer
 function M.setup(limit)
@@ -21,6 +27,7 @@ end
 
 function M.reset()
   M.rooms, M.order, M.messages, M.seen, M.glanced = {}, {}, {}, {}, {}
+  M.id_count = 0
 end
 
 local function touch_room(id, display, last_ts)
@@ -37,6 +44,39 @@ local function touch_room(id, display, last_ts)
     room.last_ts = last_ts
   end
   return room
+end
+
+---Drop the de-duplication entries for messages that have already fallen out
+---of every room's history. Those events can never arrive again — the daemon
+---does not replay — so remembering them buys nothing.
+local function prune_ids()
+  local seen, glanced = {}, {}
+  local n = 0
+  for _, list in pairs(M.messages) do
+    for _, msg in ipairs(list) do
+      seen[msg.event] = true
+      if M.glanced[msg.event] then
+        glanced[msg.event] = true
+      end
+      n = n + 1
+    end
+  end
+  M.seen, M.glanced = seen, glanced
+  return n
+end
+
+local function remember(event)
+  M.seen[event] = true
+  M.id_count = M.id_count + 1
+end
+
+---Prune once the caller has finished updating M.messages. Doing it mid-update
+---would rebuild the tables from a list that does not yet hold the message
+---being recorded.
+local function maybe_prune()
+  if M.id_count > id_limit then
+    M.id_count = prune_ids()
+  end
 end
 
 local function bump(id)
@@ -57,7 +97,7 @@ function M.on_message(msg)
   if not msg or not msg.event or M.seen[msg.event] then
     return false
   end
-  M.seen[msg.event] = true
+  remember(msg.event)
   touch_room(msg.room, nil, msg.ts)
   bump(msg.room)
 
@@ -74,6 +114,7 @@ function M.on_message(msg)
   if msg.own then
     M.glanced[msg.event] = true
   end
+  maybe_prune()
   return true
 end
 
@@ -94,13 +135,14 @@ function M.on_history(room, msgs)
   touch_room(room)
   local list = {}
   for _, msg in ipairs(msgs or {}) do
-    M.seen[msg.event] = true
+    remember(msg.event)
     -- History is context the user asked for, not something new to show at
     -- L1; treat it as already glanced.
     M.glanced[msg.event] = true
     list[#list + 1] = msg
   end
   M.messages[room] = list
+  maybe_prune()
 end
 
 ---Total unread across every room, for the notifier.

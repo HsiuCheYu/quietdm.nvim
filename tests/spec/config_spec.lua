@@ -27,4 +27,26 @@ return {
     vim.env.XDG_RUNTIME_DIR = saved
     T.eq(path, '/tmp/xdg-test/quietdm/sock')
   end,
+
+  -- The daemon's last resort is Go's os.TempDir(): $TMPDIR with trailing
+  -- slashes stripped, else /tmp. If the two sides disagree on the path the
+  -- frontend simply never connects — silently, because that is what this
+  -- plugin does with connection failures. scripts/e2e.sh compares the two
+  -- implementations directly; this only covers the string handling.
+  ['the last-resort socket path mirrors Go os.TempDir'] = function()
+    local uid = (vim.uv or vim.loop).getuid()
+    if vim.fn.isdirectory('/run/user/' .. uid) == 1 then
+      return -- this machine never reaches the temp-dir fallback
+    end
+    local xdg, tmp = vim.env.XDG_RUNTIME_DIR, vim.env.TMPDIR
+    vim.env.XDG_RUNTIME_DIR = ''
+
+    vim.env.TMPDIR = ''
+    T.eq(config.socket_path(config.build()), '/tmp/quietdm/sock')
+
+    vim.env.TMPDIR = '/var/tmp/mine///'
+    T.eq(config.socket_path(config.build()), '/var/tmp/mine/quietdm/sock')
+
+    vim.env.XDG_RUNTIME_DIR, vim.env.TMPDIR = xdg, tmp
+  end,
 }

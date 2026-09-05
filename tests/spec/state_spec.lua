@@ -22,6 +22,24 @@ return {
     T.eq(#state.recent('!r:localhost'), 1)
   end,
 
+  -- The de-duplication tables would otherwise grow for as long as the editor
+  -- stays open, which for this plugin is all day.
+  ['the de-duplication tables do not grow without bound'] = function()
+    state.reset()
+    state.setup(5)
+    for i = 1, 6000 do
+      state.on_message(msg({ event = '$' .. i, body = 'm' .. i }))
+    end
+    local seen = 0
+    for _ in pairs(state.seen) do
+      seen = seen + 1
+    end
+    T.truthy(seen <= 5000, 'seen holds ' .. seen .. ' ids')
+    T.eq(#state.recent('!r:localhost'), 5, 'pruning must not touch the history itself')
+    -- What is still on screen must still be de-duplicated.
+    T.falsy(state.on_message(msg({ event = '$6000', body = 'm6000' })))
+  end,
+
   ['history is bounded'] = function()
     state.reset()
     state.setup(3)

@@ -10,6 +10,7 @@ local blame = {
   name = 'blame',
   level = 'glance',
   bufnr = nil,
+  mark = nil,
 }
 
 function blame:setup(ctx)
@@ -41,16 +42,21 @@ function blame:render(msgs, ctx)
 
   local bufnr = vim.api.nvim_get_current_buf()
   local lnum = vim.api.nvim_win_get_cursor(0)[1] - 1
+  self:clear()
   self.bufnr = bufnr
-  ctx.virt_text(bufnr, lnum, chunks, { align = 'right' })
+  self.mark = ctx.virt_text(bufnr, lnum, chunks, { align = 'right' })
 end
 
+-- Delete exactly the one extmark this renderer drew. Clearing the whole
+-- namespace would also wipe the failed-send hint, which is the one thing the
+-- user must be told about (docs/design/01-covert-model.md section 7) — and a
+-- cursor move is enough to trigger it.
 function blame:clear()
-  local ns = require('quietdm.ctx').namespace()
-  if self.bufnr and vim.api.nvim_buf_is_valid(self.bufnr) then
-    vim.api.nvim_buf_clear_namespace(self.bufnr, ns, 0, -1)
+  if self.mark and self.bufnr and vim.api.nvim_buf_is_valid(self.bufnr) then
+    local ns = require('quietdm.ctx').namespace()
+    pcall(vim.api.nvim_buf_del_extmark, self.bufnr, ns, self.mark)
   end
-  self.bufnr = nil
+  self.bufnr, self.mark = nil, nil
 end
 
 return registry.renderer(blame)

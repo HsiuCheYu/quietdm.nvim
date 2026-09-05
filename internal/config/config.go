@@ -237,9 +237,23 @@ func (c Config) Validate() error {
 	}
 	switch c.Transport.Kind {
 	case "mock":
+		// A [mock] section in the file replaces the built-in script wholesale,
+		// so a config with messages but no rooms leaves the transport with an
+		// empty room list — and every reply comes back "unknown_room" until
+		// the first message happens to arrive. Say so at startup instead.
+		declared := make(map[string]bool, len(c.Mock.Rooms))
+		for _, r := range c.Mock.Rooms {
+			if r.ID == "" {
+				return fmt.Errorf("mock room %q has no id", r.Display)
+			}
+			declared[r.ID] = true
+		}
 		for _, m := range c.Mock.Msgs {
 			if m.Room == "" {
 				return fmt.Errorf("mock message %q has no room", m.Body)
+			}
+			if !declared[m.Room] {
+				return fmt.Errorf("mock message %q names room %q, which has no [[mock.room]]", m.Body, m.Room)
 			}
 		}
 	case "matrix":

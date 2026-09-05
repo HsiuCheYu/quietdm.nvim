@@ -157,6 +157,33 @@ return {
     d.close()
   end,
 
+  -- A reply that vanishes without a word is the one failure the covert model
+  -- says the user must be told about (01-covert-model.md section 7). The
+  -- caller only learns about it if the callback runs.
+  ['a command sent with no daemon answers with an error'] = function()
+    ipc.stop()
+    local got
+    local written = ipc.send({ t = 'send', room = '!r:localhost', body = 'hi' }, function(ev)
+      got = ev
+    end)
+    T.falsy(written, 'nothing can be written without a daemon')
+    T.truthy(wait_for(function() return got ~= nil end, 1000), 'the callback must still run')
+    T.eq(got.t, 'error')
+    T.eq(got.code, 'disconnected')
+  end,
+
+  ['a request still in flight when the link drops is answered'] = function()
+    local d = fake_daemon()
+    handshake(d)
+    local got
+    ipc.send({ t = 'history', room = '!r:localhost', limit = 5 }, function(ev) got = ev end)
+    T.truthy(d.next('history'), 'the daemon received it')
+    d.close()
+    T.truthy(wait_for(function() return got ~= nil end, 2000), 'a dropped link must not eat the callback')
+    T.eq(got.t, 'error')
+    quietdm.stop()
+  end,
+
   ['stop leaves nothing behind'] = function()
     local d = fake_daemon()
     handshake(d)

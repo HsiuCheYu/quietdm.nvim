@@ -64,6 +64,22 @@ local function stop_timer()
   end
 end
 
+---Answer every outstanding request with an error, so a caller waiting for a
+---reply learns that it is never coming. Dropping the callbacks instead is how
+---a failed reply ends up vanishing without a word.
+local function fail_pending(code)
+  local pending = state.pending
+  state.pending = {}
+  for id, cb in pairs(pending) do
+    vim.schedule(function()
+      local ok, err = pcall(cb, { t = 'error', id = id, code = code, msg = 'no daemon' })
+      if not ok then
+        log.error('reply handler: ' .. tostring(err))
+      end
+    end)
+  end
+end
+
 local function close_pipe()
   if state.pipe then
     local pipe = state.pipe
@@ -78,7 +94,7 @@ local function close_pipe()
   state.buffer = ''
   state.connected = false
   state.online = false
-  state.pending = {}
+  fail_pending('disconnected')
 end
 
 local connect -- forward declaration
@@ -132,12 +148,31 @@ end
 ---@param cb fun(event: table)|nil
 ---@return boolean
 function M.send(cmd, cb)
+  local id
   if cb then
     state.seq = state.seq + 1
-    cmd.id = tostring(state.seq)
-    state.pending[cmd.id] = cb
+    id = tostring(state.seq)
+    cmd.id = id
   end
-  return write(cmd)
+  if write(cmd) then
+    if cb then
+      state.pending[id] = cb
+    end
+    return true
+  end
+  -- A dropped command is normally fine: the daemon holds the real state and
+  -- we resynchronise on reconnect. But this caller asked for an answer, and
+  -- silence would leave a reply the user typed looking like it was sent
+  -- (docs/design/01-covert-model.md section 7).
+  if cb then
+    vim.schedule(function()
+      local ok, err = pcall(cb, { t = 'error', id = id, code = 'disconnected', msg = 'no daemon' })
+      if not ok then
+        log.error('reply handler: ' .. tostring(err))
+      end
+    end)
+  end
+  return false
 end
 
 local function dispatch(event)
