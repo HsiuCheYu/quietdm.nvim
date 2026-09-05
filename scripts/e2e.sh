@@ -14,6 +14,20 @@ cleanup() {
 }
 trap cleanup EXIT
 
+# The frontend works out the default socket path on its own, in Lua. If the two
+# implementations ever stop agreeing, nothing connects and nothing says why —
+# so compare them directly, with the environment forced down to the last-resort
+# branch.
+want=$(XDG_RUNTIME_DIR= TMPDIR="$rundir" "$root/quietdmd" -config /dev/null -print-socket)
+got=$(XDG_RUNTIME_DIR= TMPDIR="$rundir" "${NVIM:-nvim}" --headless \
+	-u "$root/tests/minimal_init.lua" \
+	-c 'lua local c = require("quietdm.config") io.write(c.socket_path(c.build()))' \
+	-c 'qall!' 2>/dev/null)
+if [ -z "$want" ] || [ "$want" != "$got" ]; then
+	echo "socket path mismatch: daemon=$want frontend=$got" >&2
+	exit 1
+fi
+
 # Let the daemon use its real default store, but inside the throwaway
 # directory, so the run exercises SQLite without touching the user's state.
 XDG_STATE_HOME="$rundir/state" \

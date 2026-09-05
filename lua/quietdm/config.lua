@@ -76,7 +76,20 @@ function M.socket_path(cfg)
     local uid = vim.uv and vim.uv.getuid and vim.uv.getuid() or vim.loop.getuid()
     runtime = '/run/user/' .. tostring(uid)
     if vim.fn.isdirectory(runtime) == 0 then
-      runtime = vim.fn.tempname():match('^(.*)/[^/]*$') or '/tmp'
+      -- The daemon's last resort is Go's os.TempDir(): $TMPDIR with trailing
+      -- slashes stripped, else /tmp. Mirror it exactly. vim.fn.tempname()
+      -- would point at nvim's own private subdirectory, which the daemon has
+      -- never heard of — and a path the two sides disagree on fails silently,
+      -- which is the hardest kind of failure to notice here.
+      local tmp = vim.env.TMPDIR
+      if not tmp or tmp == '' then
+        runtime = '/tmp'
+      else
+        while #tmp > 1 and tmp:sub(-1) == '/' do
+          tmp = tmp:sub(1, -2)
+        end
+        runtime = tmp
+      end
     end
   end
   return runtime .. '/quietdm/sock'

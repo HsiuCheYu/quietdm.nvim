@@ -38,6 +38,7 @@ func run() error {
 	var (
 		configPath = flag.String("config", config.DefaultConfigPath(), "path to config.toml")
 		socketPath = flag.String("socket", "", "override the IPC socket path")
+		printSock  = flag.Bool("print-socket", false, "print the resolved socket path and exit")
 		verbose    = flag.Bool("v", false, "log at debug level")
 		showVer    = flag.Bool("version", false, "print version and exit")
 	)
@@ -60,6 +61,13 @@ func run() error {
 	}
 	if *socketPath != "" {
 		cfg.Daemon.Socket = *socketPath
+	}
+	// The frontend resolves this path on its own, with no way to ask. Printing
+	// it is how the two implementations get compared (scripts/e2e.sh) and how a
+	// user finds out where the daemon thinks its socket is.
+	if *printSock {
+		fmt.Println(cfg.SocketPath())
+		return nil
 	}
 	if err := cfg.Validate(); err != nil {
 		return err
