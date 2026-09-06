@@ -40,6 +40,25 @@ return {
     T.falsy(state.on_message(msg({ event = '$6000', body = 'm6000' })))
   end,
 
+  -- Once the retained messages alone exceed the limit, seeding the counter
+  -- with what survived would make the threshold permanently true, and every
+  -- single message from then on would rebuild both tables.
+  ['pruning restarts the counter rather than seeding it'] = function()
+    state.reset()
+    state.setup(50)
+    for room = 1, 120 do
+      for i = 1, 50 do
+        state.on_message(msg({ room = '!r' .. room, event = '$' .. room .. '-' .. i }))
+      end
+    end
+    local retained = 0
+    for _ in pairs(state.seen) do
+      retained = retained + 1
+    end
+    T.truthy(retained > 5000, 'the test needs more messages than the prune limit')
+    T.truthy(state.id_count < retained, 'the counter was seeded with the survivors: ' .. state.id_count)
+  end,
+
   ['history is bounded'] = function()
     state.reset()
     state.setup(3)

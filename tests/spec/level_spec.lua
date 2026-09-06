@@ -231,6 +231,37 @@ return {
     T.eq(#marks(buf), 0)
   end,
 
+  -- The other direction of the same rule: the hint expiring must not take a
+  -- glance drawn in the meantime with it.
+  ['the failed-send hint expiring leaves the glance alone'] = function()
+    local buf = fresh({ level = { hint_timeout = 30 } })
+    quietdm.send_failed()
+    T.eq(#marks(buf), 1)
+    local hint = marks(buf)[1][1]
+    arrive('晚上要吃什麼')
+    level.glance()
+    T.eq(#marks(buf), 2)
+
+    -- By mark id, not by count: a count can be satisfied (or missed) by
+    -- something else clearing the namespace between two polls.
+    local function has(id)
+      for _, m in ipairs(marks(buf)) do
+        if m[1] == id then
+          return true
+        end
+      end
+      return false
+    end
+    T.truthy(vim.wait(1000, function() return not has(hint) end, 5), 'the hint never expired')
+    T.eq(#marks(buf), 1, 'the glance went with it')
+    local text = ''
+    for _, chunk in ipairs(marks(buf)[1][4].virt_text) do
+      text = text .. chunk[1]
+    end
+    T.truthy(text:find('m.chen', 1, true), 'the surviving mark is the glance, got ' .. text)
+    level.clear()
+  end,
+
   ['panic clears the screen and goes silent'] = function()
     local buf = fresh()
     arrive('hi')

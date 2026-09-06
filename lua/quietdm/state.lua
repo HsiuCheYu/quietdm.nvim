@@ -51,18 +51,15 @@ end
 ---does not replay — so remembering them buys nothing.
 local function prune_ids()
   local seen, glanced = {}, {}
-  local n = 0
   for _, list in pairs(M.messages) do
     for _, msg in ipairs(list) do
       seen[msg.event] = true
       if M.glanced[msg.event] then
         glanced[msg.event] = true
       end
-      n = n + 1
     end
   end
   M.seen, M.glanced = seen, glanced
-  return n
 end
 
 local function remember(event)
@@ -75,7 +72,12 @@ end
 ---being recorded.
 local function maybe_prune()
   if M.id_count > id_limit then
-    M.id_count = prune_ids()
+    prune_ids()
+    -- Counting from zero, not from what survived. Seeding the counter with
+    -- the surviving count would make the threshold permanently true once the
+    -- rooms themselves hold more than the limit, and then every single
+    -- message would rebuild both tables.
+    M.id_count = 0
   end
 end
 

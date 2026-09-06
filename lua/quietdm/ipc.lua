@@ -277,6 +277,10 @@ end
 function M.stop()
   state.want = false
   stop_timer()
+  -- A stop the user asked for is not a failure. Dropping the outstanding
+  -- callbacks rather than answering them with an error is what keeps
+  -- :QuietdmStop from drawing a failed-send hint on its way out.
+  state.pending = {}
   close_pipe()
 end
 

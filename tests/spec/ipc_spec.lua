@@ -184,6 +184,47 @@ return {
     quietdm.stop()
   end,
 
+  -- The handshake fans out into a rooms request and one history request per
+  -- room. Those callbacks now get a synthetic error when the daemon goes
+  -- away, and an error carries no room and no messages — reading them as if
+  -- it did is a runtime error swallowed by a pcall, so nothing would ever say
+  -- the notifier had stopped updating.
+  ['a handshake interrupted mid-history logs nothing'] = function()
+    local log = require('quietdm.log')
+    local d = fake_daemon()
+    handshake(d)
+    log.clear()
+
+    local rooms = d.next('rooms')
+    T.truthy(rooms, 'the frontend asks for the room list')
+    d.push({ t = 'rooms', id = rooms.id, rooms = {
+      { room = '!r:localhost', display = 'm.chen', unread = 1, last_ts = 1 },
+    } })
+    T.truthy(d.next('history'), 'the frontend asks for the history')
+    d.close() -- ... and never gets it
+
+    T.truthy(wait_for(function() return not ipc.connected() end))
+    vim.wait(100)
+    for _, line in ipairs(log.lines()) do
+      T.falsy(line:find('[error]', 1, true), 'logged: ' .. line)
+    end
+    quietdm.stop()
+  end,
+
+  -- The counterpart to the two tests above: a disconnect the user asked for
+  -- is not a failure, so nothing is reported and nothing gets drawn.
+  ['a stop the user asked for reports no failures'] = function()
+    local d = fake_daemon()
+    handshake(d)
+    local got
+    ipc.send({ t = 'history', room = '!r:localhost', limit = 5 }, function(ev) got = ev end)
+    T.truthy(d.next('history'))
+    quietdm.stop()
+    vim.wait(200)
+    T.eq(got, nil, 'a deliberate stop must not answer with an error')
+    d.close()
+  end,
+
   ['stop leaves nothing behind'] = function()
     local d = fake_daemon()
     handshake(d)
