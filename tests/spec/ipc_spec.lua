@@ -211,6 +211,20 @@ return {
     quietdm.stop()
   end,
 
+  -- The counterpart to the two tests above: a disconnect the user asked for
+  -- is not a failure, so nothing is reported and nothing gets drawn.
+  ['a stop the user asked for reports no failures'] = function()
+    local d = fake_daemon()
+    handshake(d)
+    local got
+    ipc.send({ t = 'history', room = '!r:localhost', limit = 5 }, function(ev) got = ev end)
+    T.truthy(d.next('history'))
+    quietdm.stop()
+    vim.wait(200)
+    T.eq(got, nil, 'a deliberate stop must not answer with an error')
+    d.close()
+  end,
+
   ['stop leaves nothing behind'] = function()
     local d = fake_daemon()
     handshake(d)

@@ -157,11 +157,6 @@ function M.stop()
   clear_all()
   state.reset()
   refresh_notifier()
-  -- ipc.stop() answers every in-flight request with an error, and those
-  -- callbacks run on the next tick — after the clear above. Without this, the
-  -- last abandoned reply would draw a failed-send hint onto a screen the user
-  -- just asked to be emptied.
-  vim.schedule(clear_all)
 end
 
 ---L2: read the recent conversation in a hover-styled float.
