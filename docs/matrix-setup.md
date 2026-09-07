@@ -11,6 +11,12 @@ IG / Messenger → mautrix-meta → Matrix homeserver → quietdmd → nvim
                   （自架）         （自架）
 ```
 
+如果你是用 `quietdmd setup` 自架的（見 [self-host.md](self-host.md) 的
+「一句話版本」），這份文件的第一、二節（拿 token、放對地方）它已經幫你做完
+了，`config.toml` 跟 token 檔也都寫好了——直接跳到
+[三、設定檔](#三設定檔) 看它寫出來的長什麼樣子即可。這份文件仍然完整保留，
+是給「接的是別人已經架好的 homeserver」或想手動除錯的人看的。
+
 ## 一、取得 access token
 
 daemon 需要一個屬於**它自己的 device** 的 token。不要沿用你手機或 Element 上那個
