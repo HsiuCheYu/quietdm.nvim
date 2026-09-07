@@ -28,6 +28,13 @@ import (
 var version = "dev"
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "setup" {
+		if err := runSetup(os.Args[2:]); err != nil && !errors.Is(err, context.Canceled) {
+			fmt.Fprintln(os.Stderr, "quietdmd setup:", err)
+			os.Exit(1)
+		}
+		return
+	}
 	if err := run(); err != nil && !errors.Is(err, context.Canceled) {
 		fmt.Fprintln(os.Stderr, "quietdmd:", err)
 		os.Exit(1)
@@ -42,6 +49,12 @@ func run() error {
 		verbose    = flag.Bool("v", false, "log at debug level")
 		showVer    = flag.Bool("version", false, "print version and exit")
 	)
+	flag.Usage = func() {
+		fmt.Fprintln(os.Stderr, "usage: quietdmd [flags]")
+		fmt.Fprintln(os.Stderr, "       quietdmd setup [flags]   接上真的 IG，一次做完 docs/self-host.md 與 docs/matrix-setup.md 的手動步驟")
+		fmt.Fprintln(os.Stderr, "\nflags:")
+		flag.PrintDefaults()
+	}
 	flag.Parse()
 
 	if *showVer {

@@ -3,6 +3,21 @@
 這份文件把一台空機器變成「quietdm 可以連的東西」。做完之後接上 daemon 的步驟在
 [matrix-setup.md](matrix-setup.md)。
 
+## 一句話版本
+
+```sh
+quietdmd setup
+```
+
+`quietdmd setup` 做的事跟底下的手動步驟完全一樣，只是自動化：它會架
+Postgres、Synapse、bridge，建立內部用的 Matrix 帳號，跑完 bridge 的三段式起
+法，最後跟 `@instagrambot` 開房間、把 `login` 送出去、把 bot 的回覆即時印在
+終端機讓你照著貼。唯一還是要你自己來的，就是貼 IG 憑證那一步。
+
+底下的逐步說明留著，是為了：(a) 想知道 `quietdmd setup` 到底做了什麼，或
+(b) 它某個階段失敗了，需要照著對應的段落手動接手繼續。每個階段失敗時的錯誤
+訊息都會指到這份文件的對應段落。
+
 ```
 IG → mautrix-instagram → Synapse → quietdmd → nvim
      （這份文件）        （這份文件）  （matrix-setup.md）

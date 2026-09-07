@@ -107,7 +107,18 @@ socket 位於 `$XDG_RUNTIME_DIR/quietdm/sock`（權限 `0600`，目錄 `0700`）
 
 ## 接上真的 IG
 
-兩份文件，照順序走：
+一句話版本，沒有 homeserver 也沒關係：
+
+```sh
+quietdmd setup
+```
+
+它會把下面兩份文件裡除了「貼上 IG 憑證」以外的每一步都做完：架
+Synapse 與 mautrix-instagram、建內部用的 Matrix 帳號、拿 access
+token、寫 `config.toml`。跑到跟 bridge bot 對話那一步時，它會把 bot
+的回覆印在終端機，照著貼就好——不用再另外開 Element。
+
+想知道它做了什麼、或它卡住時要怎麼自己動手，兩份文件照順序走：
 
 1. **[docs/self-host.md](docs/self-host.md)** — 用 `contrib/docker/compose.yaml`
    把 Synapse 與 mautrix-instagram 架起來。沒有 federation、沒有 TLS、沒有對外的

@@ -40,6 +40,20 @@ func StateDir() string {
 	return filepath.Join(home, ".local", "state", "quietdm")
 }
 
+// SelfHostDir returns $XDG_DATA_HOME/quietdm/selfhost, where `quietdmd setup`
+// materializes the self-hosting compose stack (compose.yaml, .env and the
+// data/ volumes it manages).
+func SelfHostDir() string {
+	if dir := os.Getenv("XDG_DATA_HOME"); dir != "" {
+		return filepath.Join(dir, "quietdm", "selfhost")
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return filepath.Join(os.TempDir(), "quietdm", "selfhost")
+	}
+	return filepath.Join(home, ".local", "share", "quietdm", "selfhost")
+}
+
 // DefaultConfigPath returns $XDG_CONFIG_HOME/quietdm/config.toml.
 func DefaultConfigPath() string {
 	if dir := os.Getenv("XDG_CONFIG_HOME"); dir != "" {
