@@ -49,9 +49,12 @@ IG → mautrix-instagram → Synapse → quietdmd → nvim
 ```sh
 cd contrib/docker
 cp .env.example .env
-$EDITOR .env          # 填一個 POSTGRES_PASSWORD
+$EDITOR .env          # 填 POSTGRES_PASSWORD，以及 QUIETDM_UID/QUIETDM_GID（`id -u`/`id -g`）
 mkdir -p data/synapse data/bridge data/postgres
 ```
+
+`QUIETDM_UID`/`QUIETDM_GID` 不填對，會撞到下面「已知會卡住的地方」第一條——`quietdmd
+setup` 會自動幫你填這兩個值，手動走這份文件才需要自己填。
 
 `data/` 與 `.env` 都在 `.gitignore` 裡。整套東西的狀態就只有這個目錄。
 
@@ -197,6 +200,17 @@ rm -rf data/
 
 ## 已知會卡住的地方
 
+- **`patch .../homeserver.yaml: permission denied`（或 `config.yaml`）**：
+  Synapse／bridge 的 image 會把它產生出來的檔案 chown 成 image 內建的固定
+  UID/GID（Synapse 是 `991`），一般（非 rootless）的 Docker 會讓這個 chown
+  直接反映到 host 上，之後不管是 `quietdmd setup` 還是你自己編輯那個
+  檔案，都會因為不是那個 UID/GID 而被拒絕。`.env` 裡的 `QUIETDM_UID`/
+  `QUIETDM_GID` 就是為了避開這個問題——兩個容器都會照這兩個值執行/
+  chown。如果你是撞在已經產生出來的舊檔案上（`.env` 補上這兩個值前就跑
+  過 `generate`），檔案已經被 chown 過了，把它們要回來再重跑一次：
+  ```sh
+  sudo chown -R $(id -u):$(id -g) data/synapse data/bridge
+  ```
 - **Synapse 抱怨 collation**：Postgres 的 locale 必須是 `C`。compose 裡的
   `POSTGRES_INITDB_ARGS` 已經處理了，但那只在**第一次**建立資料目錄時生效。如果你
   是在既有的 `data/postgres` 上撞到這個，要砍掉重建。
