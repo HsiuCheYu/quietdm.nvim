@@ -3,6 +3,7 @@ package setup
 import (
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
 )
 
@@ -90,5 +91,48 @@ func TestMaterializeStack_ReusesExistingPostgresPassword(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(dir, "compose.yaml")); err != nil {
 		t.Errorf("compose.yaml missing: %v", err)
+	}
+}
+
+func TestMaterializeStack_WritesHostUIDAndGID(t *testing.T) {
+	dir := t.TempDir()
+
+	if _, err := materializeStack(dir); err != nil {
+		t.Fatalf("materializeStack: %v", err)
+	}
+
+	env, err := os.ReadFile(filepath.Join(dir, ".env"))
+	if err != nil {
+		t.Fatalf("read .env: %v", err)
+	}
+	uid, ok := parseEnvVar(string(env), "QUIETDM_UID")
+	if !ok || uid != strconv.Itoa(os.Getuid()) {
+		t.Errorf("QUIETDM_UID = %q, %v; want %d, true", uid, ok, os.Getuid())
+	}
+	gid, ok := parseEnvVar(string(env), "QUIETDM_GID")
+	if !ok || gid != strconv.Itoa(os.Getgid()) {
+		t.Errorf("QUIETDM_GID = %q, %v; want %d, true", gid, ok, os.Getgid())
+	}
+}
+
+func TestMaterializeStack_PreservesExplicitUIDAndGID(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, ".env"), []byte("POSTGRES_PASSWORD=x\nQUIETDM_UID=1234\nQUIETDM_GID=5678\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := materializeStack(dir); err != nil {
+		t.Fatalf("materializeStack: %v", err)
+	}
+
+	env, err := os.ReadFile(filepath.Join(dir, ".env"))
+	if err != nil {
+		t.Fatalf("read .env: %v", err)
+	}
+	if uid, _ := parseEnvVar(string(env), "QUIETDM_UID"); uid != "1234" {
+		t.Errorf("QUIETDM_UID = %q, want unchanged 1234", uid)
+	}
+	if gid, _ := parseEnvVar(string(env), "QUIETDM_GID"); gid != "5678" {
+		t.Errorf("QUIETDM_GID = %q, want unchanged 5678", gid)
 	}
 }

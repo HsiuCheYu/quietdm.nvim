@@ -33,6 +33,11 @@ services:
     restart: unless-stopped
     environment:
       SYNAPSE_CONFIG_PATH: /data/homeserver.yaml
+      # Without these the image chowns everything it generates to its own
+      # internal UID/GID, which quietdmd (running as the host user) then has
+      # no permission to patch. QUIETDM_UID/GID come from .env.
+      UID: ${QUIETDM_UID}
+      GID: ${QUIETDM_GID}
     volumes:
       - ./data/synapse:/data
       # The bridge writes its registration file into its own data directory;
@@ -52,8 +57,10 @@ services:
     image: dock.mau.dev/mautrix/meta:ig-latest
     restart: unless-stopped
     environment:
-      UID: 1337
-      GID: 1337
+      # Same reasoning as the synapse service above: match the host user
+      # instead of a fixed in-image ID.
+      UID: ${QUIETDM_UID}
+      GID: ${QUIETDM_GID}
     volumes:
       - ./data/bridge:/data
     depends_on:

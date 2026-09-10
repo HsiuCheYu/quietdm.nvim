@@ -35,20 +35,39 @@ func materializeStack(dir string) (dbPassword string, err error) {
 	}
 
 	envPath := filepath.Join(dir, ".env")
-	if existing, err := os.ReadFile(envPath); err == nil {
-		if pw, ok := parseEnvVar(string(existing), "POSTGRES_PASSWORD"); ok && pw != "" {
+	existing := ""
+	if data, err := os.ReadFile(envPath); err == nil {
+		existing = string(data)
+		if pw, ok := parseEnvVar(existing, "POSTGRES_PASSWORD"); ok && pw != "" {
 			dbPassword = pw
 		}
 	} else if !os.IsNotExist(err) {
 		return "", fmt.Errorf("read %s: %w", envPath, err)
 	}
+
+	appended := ""
 	if dbPassword == "" {
 		dbPassword, err = randomHex(16)
 		if err != nil {
 			return "", err
 		}
-		content := fmt.Sprintf("POSTGRES_PASSWORD=%s\n", dbPassword)
-		if err := os.WriteFile(envPath, []byte(content), 0o600); err != nil {
+		appended += fmt.Sprintf("POSTGRES_PASSWORD=%s\n", dbPassword)
+	}
+	// Synapse and the bridge chown whatever they generate to their own
+	// in-image UID/GID before quietdmd ever gets to patch those files; on a
+	// normal (non-rootless) Docker install that lands on the host verbatim,
+	// so the very next patch step fails with "permission denied" (see
+	// docs/self-host.md "已知會卡住的地方"). Pinning both containers to the
+	// invoking user's own UID/GID keeps every generated file writable by
+	// whoever runs `quietdmd setup`.
+	if uid, ok := parseEnvVar(existing+appended, "QUIETDM_UID"); !ok || uid == "" {
+		appended += fmt.Sprintf("QUIETDM_UID=%d\n", os.Getuid())
+	}
+	if gid, ok := parseEnvVar(existing+appended, "QUIETDM_GID"); !ok || gid == "" {
+		appended += fmt.Sprintf("QUIETDM_GID=%d\n", os.Getgid())
+	}
+	if appended != "" {
+		if err := os.WriteFile(envPath, []byte(existing+appended), 0o600); err != nil {
 			return "", fmt.Errorf("write %s: %w", envPath, err)
 		}
 	}
