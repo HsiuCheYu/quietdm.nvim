@@ -63,4 +63,38 @@ return {
     vim.env.XDG_RUNTIME_DIR = saved
     T.eq(path, '/run/user/test/quietdm/sock')
   end,
+
+  -- On Windows luv leaves getuid undefined on both vim.uv and vim.loop
+  -- (there is no uid to report), instead of raising. Without XDG_RUNTIME_DIR
+  -- either, socket_path must fall back to temp_dir() rather than crash on a
+  -- nil call.
+  ['socket path falls back to temp_dir when getuid is unavailable'] = function()
+    local saved_runtime = vim.env.XDG_RUNTIME_DIR
+    local saved_tmpdir = vim.env.TMPDIR
+    local saved_uv_getuid = vim.uv and vim.uv.getuid
+    local saved_loop_getuid = vim.loop and vim.loop.getuid
+
+    vim.env.XDG_RUNTIME_DIR = ''
+    vim.env.TMPDIR = '/tmp'
+    if vim.uv then
+      vim.uv.getuid = nil
+    end
+    if vim.loop then
+      vim.loop.getuid = nil
+    end
+
+    local ok, path = pcall(config.socket_path, config.build())
+
+    vim.env.XDG_RUNTIME_DIR = saved_runtime
+    vim.env.TMPDIR = saved_tmpdir
+    if vim.uv then
+      vim.uv.getuid = saved_uv_getuid
+    end
+    if vim.loop then
+      vim.loop.getuid = saved_loop_getuid
+    end
+
+    T.eq(ok, true)
+    T.eq(path, '/tmp/quietdm/sock')
+  end,
 }
