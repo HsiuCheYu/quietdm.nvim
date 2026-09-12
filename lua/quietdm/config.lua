@@ -101,9 +101,12 @@ function M.socket_path(cfg)
   end
   local runtime = vim.env.XDG_RUNTIME_DIR
   if not runtime or runtime == '' then
-    -- getuid has no Windows equivalent, so luv leaves it undefined there
-    -- rather than raising: guard both vim.uv and the vim.loop fallback
-    -- before calling, and fall back to temp_dir() when neither exists.
+    -- Guard both vim.uv and the vim.loop fallback before calling: a luv
+    -- build without getuid would otherwise raise here. The fallback path
+    -- mirrors the daemon's os.TempDir() on the platforms quietdmd actually
+    -- ships for (see release.yml: linux and darwin only), so the two agree
+    -- on where the socket lives. It does not try to mirror Windows temp
+    -- semantics -- there is no Windows quietdmd to agree with.
     local getuid = (vim.uv and vim.uv.getuid) or (vim.loop and vim.loop.getuid)
     if getuid then
       runtime = '/run/user/' .. tostring(getuid())
