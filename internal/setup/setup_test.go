@@ -6,6 +6,8 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	dockerstack "github.com/HsiuCheYu/quietdm.nvim/contrib/docker"
 )
 
 func TestOptions_SetDefaults_FillsEverythingWhenEmpty(t *testing.T) {
@@ -188,5 +190,35 @@ func TestMaterializeStack_ReplacesEmptyUIDInPlace(t *testing.T) {
 	}
 	if n := strings.Count(string(env), "QUIETDM_GID="); n != 1 {
 		t.Errorf("QUIETDM_GID assigned %d times, want 1:\n%s", n, env)
+	}
+}
+
+// TestMaterializeStack_FillsUIDAfterCopyingEnvExample walks the path
+// docs/self-host.md tells a reader to take -- `cp .env.example .env`, then
+// `quietdmd setup` -- and pins the contract between the two: whatever
+// .env.example ships for QUIETDM_UID/GID has to be blank, because
+// ensureEnvVar deliberately leaves a non-empty value alone. Shipping a
+// plausible-looking default (say 1000) would silently survive setup on every
+// host that does not happen to use it, which is the "permission denied" this
+// pinning exists to prevent.
+func TestMaterializeStack_FillsUIDAfterCopyingEnvExample(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, ".env"), dockerstack.EnvExample, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := materializeStack(dir); err != nil {
+		t.Fatalf("materializeStack: %v", err)
+	}
+
+	env, err := os.ReadFile(filepath.Join(dir, ".env"))
+	if err != nil {
+		t.Fatalf("read .env: %v", err)
+	}
+	if uid, _ := parseEnvVar(string(env), "QUIETDM_UID"); uid != strconv.Itoa(os.Getuid()) {
+		t.Errorf("QUIETDM_UID = %q, want %d", uid, os.Getuid())
+	}
+	if gid, _ := parseEnvVar(string(env), "QUIETDM_GID"); gid != strconv.Itoa(os.Getgid()) {
+		t.Errorf("QUIETDM_GID = %q, want %d", gid, os.Getgid())
 	}
 }
