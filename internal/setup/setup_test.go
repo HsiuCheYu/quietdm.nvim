@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 )
 
@@ -134,5 +135,58 @@ func TestMaterializeStack_PreservesExplicitUIDAndGID(t *testing.T) {
 	}
 	if gid, _ := parseEnvVar(string(env), "QUIETDM_GID"); gid != "5678" {
 		t.Errorf("QUIETDM_GID = %q, want unchanged 5678", gid)
+	}
+}
+
+func TestMaterializeStack_AppendsToEnvWithoutTrailingNewline(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, ".env"), []byte("POSTGRES_PASSWORD=kept"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	pw, err := materializeStack(dir)
+	if err != nil {
+		t.Fatalf("materializeStack: %v", err)
+	}
+	if pw != "kept" {
+		t.Errorf("password = %q, want kept", pw)
+	}
+
+	env, err := os.ReadFile(filepath.Join(dir, ".env"))
+	if err != nil {
+		t.Fatalf("read .env: %v", err)
+	}
+	if got, _ := parseEnvVar(string(env), "POSTGRES_PASSWORD"); got != "kept" {
+		t.Errorf("POSTGRES_PASSWORD = %q, want kept (the appended line glued onto it?)", got)
+	}
+	if uid, ok := parseEnvVar(string(env), "QUIETDM_UID"); !ok || uid != strconv.Itoa(os.Getuid()) {
+		t.Errorf("QUIETDM_UID = %q, %v; want %d, true", uid, ok, os.Getuid())
+	}
+}
+
+func TestMaterializeStack_ReplacesEmptyUIDInPlace(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, ".env"), []byte("POSTGRES_PASSWORD=x\nQUIETDM_UID=\nQUIETDM_GID=\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	for range 2 {
+		if _, err := materializeStack(dir); err != nil {
+			t.Fatalf("materializeStack: %v", err)
+		}
+	}
+
+	env, err := os.ReadFile(filepath.Join(dir, ".env"))
+	if err != nil {
+		t.Fatalf("read .env: %v", err)
+	}
+	if uid, _ := parseEnvVar(string(env), "QUIETDM_UID"); uid != strconv.Itoa(os.Getuid()) {
+		t.Errorf("QUIETDM_UID = %q, want %d", uid, os.Getuid())
+	}
+	if n := strings.Count(string(env), "QUIETDM_UID="); n != 1 {
+		t.Errorf("QUIETDM_UID assigned %d times, want 1:\n%s", n, env)
+	}
+	if n := strings.Count(string(env), "QUIETDM_GID="); n != 1 {
+		t.Errorf("QUIETDM_GID assigned %d times, want 1:\n%s", n, env)
 	}
 }

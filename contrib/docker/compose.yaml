@@ -35,9 +35,12 @@ services:
       SYNAPSE_CONFIG_PATH: /data/homeserver.yaml
       # Without these the image chowns everything it generates to its own
       # internal UID/GID, which quietdmd (running as the host user) then has
-      # no permission to patch. QUIETDM_UID/GID come from .env.
-      UID: ${QUIETDM_UID}
-      GID: ${QUIETDM_GID}
+      # no permission to patch. QUIETDM_UID/GID come from .env; both are
+      # required rather than defaulted, because an empty UID is worse than a
+      # missing one — the image does int(os.environ["UID"]) and crash-loops
+      # on "".
+      UID: ${QUIETDM_UID:?set QUIETDM_UID in contrib/docker/.env (id -u)}
+      GID: ${QUIETDM_GID:?set QUIETDM_GID in contrib/docker/.env (id -g)}
     volumes:
       - ./data/synapse:/data
       # The bridge writes its registration file into its own data directory;
@@ -59,8 +62,8 @@ services:
     environment:
       # Same reasoning as the synapse service above: match the host user
       # instead of a fixed in-image ID.
-      UID: ${QUIETDM_UID}
-      GID: ${QUIETDM_GID}
+      UID: ${QUIETDM_UID:?set QUIETDM_UID in contrib/docker/.env (id -u)}
+      GID: ${QUIETDM_GID:?set QUIETDM_GID in contrib/docker/.env (id -g)}
     volumes:
       - ./data/bridge:/data
     depends_on:

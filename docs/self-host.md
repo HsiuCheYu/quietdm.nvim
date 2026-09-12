@@ -53,8 +53,10 @@ $EDITOR .env          # 填 POSTGRES_PASSWORD，以及 QUIETDM_UID/QUIETDM_GID�
 mkdir -p data/synapse data/bridge data/postgres
 ```
 
-`QUIETDM_UID`/`QUIETDM_GID` 不填對，會撞到下面「已知會卡住的地方」第一條——`quietdmd
-setup` 會自動幫你填這兩個值，手動走這份文件才需要自己填。
+`QUIETDM_UID`/`QUIETDM_GID` 不填對，會撞到下面「已知會卡住的地方」第一條；留空或整個
+沒填，`docker compose` 會直接拒絕啟動並叫你去填（compose 裡是必填變數，因為空字串比
+沒有更糟——Synapse 的 image 會拿去 `int("")` 然後一直重啟）。`quietdmd setup` 會自動
+幫你填這兩個值，手動走這份文件才需要自己填。
 
 `data/` 與 `.env` 都在 `.gitignore` 裡。整套東西的狀態就只有這個目錄。
 
