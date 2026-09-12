@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -45,13 +46,13 @@ func materializeStack(dir string) (dbPassword string, err error) {
 		return "", fmt.Errorf("read %s: %w", envPath, err)
 	}
 
-	appended := ""
+	updated := existing
 	if dbPassword == "" {
 		dbPassword, err = randomHex(16)
 		if err != nil {
 			return "", err
 		}
-		appended += fmt.Sprintf("POSTGRES_PASSWORD=%s\n", dbPassword)
+		updated = ensureEnvVar(updated, "POSTGRES_PASSWORD", dbPassword)
 	}
 	// Synapse and the bridge chown whatever they generate to their own
 	// in-image UID/GID before quietdmd ever gets to patch those files; on a
@@ -60,14 +61,10 @@ func materializeStack(dir string) (dbPassword string, err error) {
 	// docs/self-host.md "已知會卡住的地方"). Pinning both containers to the
 	// invoking user's own UID/GID keeps every generated file writable by
 	// whoever runs `quietdmd setup`.
-	if uid, ok := parseEnvVar(existing+appended, "QUIETDM_UID"); !ok || uid == "" {
-		appended += fmt.Sprintf("QUIETDM_UID=%d\n", os.Getuid())
-	}
-	if gid, ok := parseEnvVar(existing+appended, "QUIETDM_GID"); !ok || gid == "" {
-		appended += fmt.Sprintf("QUIETDM_GID=%d\n", os.Getgid())
-	}
-	if appended != "" {
-		if err := os.WriteFile(envPath, []byte(existing+appended), 0o600); err != nil {
+	updated = ensureEnvVar(updated, "QUIETDM_UID", strconv.Itoa(os.Getuid()))
+	updated = ensureEnvVar(updated, "QUIETDM_GID", strconv.Itoa(os.Getgid()))
+	if updated != existing {
+		if err := os.WriteFile(envPath, []byte(updated), 0o600); err != nil {
 			return "", fmt.Errorf("write %s: %w", envPath, err)
 		}
 	}
@@ -226,6 +223,34 @@ func randomHex(n int) (string, error) {
 		return "", fmt.Errorf("generate random bytes: %w", err)
 	}
 	return hex.EncodeToString(buf), nil
+}
+
+// ensureEnvVar returns content with key assigned value, unless it already
+// carries a non-empty assignment for key — in which case the caller's own
+// value wins and content comes back untouched. An existing but empty
+// assignment is rewritten in place rather than shadowed by an appended
+// duplicate (parseEnvVar reads the first match, so a duplicate would make
+// every later run append yet another line), and a file that does not end in a
+// newline gets one first so the new line cannot glue itself onto the previous
+// value.
+func ensureEnvVar(content, key, value string) string {
+	assignment := key + "=" + value
+	lines := strings.Split(content, "\n")
+	for i, line := range lines {
+		v, ok := strings.CutPrefix(strings.TrimSpace(line), key+"=")
+		if !ok {
+			continue
+		}
+		if v != "" {
+			return content
+		}
+		lines[i] = assignment
+		return strings.Join(lines, "\n")
+	}
+	if content != "" && !strings.HasSuffix(content, "\n") {
+		content += "\n"
+	}
+	return content + assignment + "\n"
 }
 
 func parseEnvVar(content, key string) (string, bool) {
